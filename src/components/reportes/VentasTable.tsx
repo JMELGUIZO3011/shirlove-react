@@ -12,7 +12,8 @@ import type { VentaReporte } from '@/types/reporte'
 import { formatCOP } from '@/lib/format'
 import { useAuth } from '@/contexts/AuthContext'
 import { useBodegas } from '@/hooks/useVentas'
-import { useEliminarVenta } from '@/hooks/useVentas'
+import { useEliminarVenta, useEliminarItemVenta } from '@/hooks/useVentas'
+import type { TipoItemVenta } from '@/services/ventaService'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -274,7 +275,71 @@ export function VentasTable({ ventas }: { ventas: VentaReporte[] }) {
   )
 }
 
+interface ItemAAnular {
+  tipo: TipoItemVenta
+  id: number
+  nombre: string
+}
+
 function DetalleVenta({ venta }: { venta: VentaReporte }) {
+  const { user } = useAuth()
+  const isAdmin = user?.esAdmin ?? false
+  const { data: bodegas = [] } = useBodegas()
+  const eliminarItem = useEliminarItemVenta()
+
+  const [itemToDelete, setItemToDelete] = useState<ItemAAnular | null>(null)
+  const [bodegaId, setBodegaId] = useState('')
+  const [motivo, setMotivo] = useState('')
+
+  // Servicios no afectan inventario; productos y combos exigen bodega destino
+  const requiereBodega = itemToDelete?.tipo !== 'servicio'
+  const totalItems =
+    venta.productos.length + venta.servicios.length + venta.combos.length
+  const esUltimoItem = totalItems === 1
+
+  function abrirDialogo(item: ItemAAnular) {
+    setItemToDelete(item)
+    setBodegaId('')
+    setMotivo('')
+  }
+
+  function cerrarDialogo() {
+    setItemToDelete(null)
+    setBodegaId('')
+    setMotivo('')
+  }
+
+  async function confirmarEliminarItem() {
+    if (!itemToDelete) return
+    if (requiereBodega && !bodegaId) return
+    try {
+      await eliminarItem.mutateAsync({
+        ventaId: venta.id,
+        tipo: itemToDelete.tipo,
+        itemId: itemToDelete.id,
+        bodegaId: requiereBodega ? Number(bodegaId) : undefined,
+        motivo: motivo.trim() || undefined,
+      })
+      cerrarDialogo()
+    } catch {
+      /* toast lo maneja el hook */
+    }
+  }
+
+  function BotonAnularItem({ item }: { item: ItemAAnular }) {
+    if (!isAdmin) return null
+    return (
+      <button
+        onClick={() => abrirDialogo(item)}
+        className="shrink-0 text-muted-foreground hover:text-destructive"
+        aria-label={`Anular ${item.nombre}`}
+        title="Anular item"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    )
+  }
+
   return (
     <div className="grid gap-4 py-2 md:grid-cols-3">
       <div>
@@ -284,12 +349,21 @@ function DetalleVenta({ venta }: { venta: VentaReporte }) {
         ) : (
           <ul className="space-y-1 text-sm">
             {venta.productos.map((p) => (
-              <li key={p.id} className="flex justify-between gap-2">
+              <li key={p.id} className="flex items-center justify-between gap-2">
                 <span className="truncate">
                   {p.cantidad}× {p.producto_nombre}
                 </span>
-                <span className="tabular-nums text-muted-foreground">
-                  {formatCOP(p.subtotal)}
+                <span className="flex items-center gap-2">
+                  <span className="tabular-nums text-muted-foreground">
+                    {formatCOP(p.subtotal)}
+                  </span>
+                  <BotonAnularItem
+                    item={{
+                      tipo: 'producto',
+                      id: p.id,
+                      nombre: `${p.cantidad}× ${p.producto_nombre}`,
+                    }}
+                  />
                 </span>
               </li>
             ))}
@@ -313,8 +387,13 @@ function DetalleVenta({ venta }: { venta: VentaReporte }) {
                       </Badge>
                     )}
                   </span>
-                  <span className="tabular-nums text-muted-foreground">
-                    {formatCOP(s.precio)}
+                  <span className="flex items-center gap-2">
+                    <span className="tabular-nums text-muted-foreground">
+                      {formatCOP(s.precio)}
+                    </span>
+                    <BotonAnularItem
+                      item={{ tipo: 'servicio', id: s.id, nombre: s.servicio_nombre }}
+                    />
                   </span>
                 </div>
                 <div className="text-xs text-muted-foreground">
@@ -334,18 +413,97 @@ function DetalleVenta({ venta }: { venta: VentaReporte }) {
         ) : (
           <ul className="space-y-1 text-sm">
             {venta.combos.map((c) => (
-              <li key={c.id} className="flex justify-between gap-2">
+              <li key={c.id} className="flex items-center justify-between gap-2">
                 <span className="truncate">
                   {c.cantidad}× {c.combo_nombre}
                 </span>
-                <span className="tabular-nums text-muted-foreground">
-                  {formatCOP(c.subtotal)}
+                <span className="flex items-center gap-2">
+                  <span className="tabular-nums text-muted-foreground">
+                    {formatCOP(c.subtotal)}
+                  </span>
+                  <BotonAnularItem
+                    item={{
+                      tipo: 'combo',
+                      id: c.id,
+                      nombre: `${c.cantidad}× ${c.combo_nombre}`,
+                    }}
+                  />
                 </span>
               </li>
             ))}
           </ul>
         )}
       </div>
+
+      <AlertDialog
+        open={itemToDelete !== null}
+        onOpenChange={(o) => {
+          if (!o) cerrarDialogo()
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Anular item de la venta #{venta.id}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-semibold text-foreground">
+                {itemToDelete?.nombre}
+              </span>{' '}
+              se marcará como anulado (se conserva el registro y deja de contar en
+              los reportes).{' '}
+              {itemToDelete?.tipo === 'servicio'
+                ? 'Los servicios no afectan inventario.'
+                : 'Las unidades se devolverán al inventario de la bodega que elijas y quedarán en el historial de registros.'}
+              {esUltimoItem &&
+                ' Es el último item activo de la venta: al anularlo, la venta completa quedará anulada.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-3">
+            {requiereBodega && (
+              <div className="space-y-1.5">
+                <Label>Bodega a la que devolver las unidades</Label>
+                <Select value={bodegaId} onValueChange={setBodegaId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione una bodega" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {bodegas.map((b) => (
+                      <SelectItem key={b.id} value={String(b.id)}>
+                        {b.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label>Motivo (opcional)</Label>
+              <Textarea
+                rows={2}
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                placeholder="Ej: item registrado por error, devolución..."
+              />
+            </div>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={eliminarItem.isPending}>
+              Cancelar
+            </AlertDialogCancel>
+            <Button
+              variant="destructive"
+              onClick={confirmarEliminarItem}
+              disabled={eliminarItem.isPending || (requiereBodega && !bodegaId)}
+            >
+              {eliminarItem.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Anular item
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

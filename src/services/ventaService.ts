@@ -63,4 +63,27 @@ export const ventaService = {
       params: { bodega_id: bodegaId, ...(motivo ? { motivo } : {}) },
     })
   },
+
+  // Anula un item específico de una venta (soft delete).
+  // Productos y combos requieren bodega para devolver las unidades; servicios no.
+  async eliminarItemVenta(
+    ventaId: number,
+    tipo: TipoItemVenta,
+    itemId: number,
+    bodegaId?: number,
+    motivo?: string,
+  ): Promise<{ message: string; venta_anulada: boolean }> {
+    const { data } = await apiClient.delete(
+      `/api/ventas/${ventaId}/items/${tipo}/${itemId}`,
+      {
+        params: {
+          ...(bodegaId ? { bodega_id: bodegaId } : {}),
+          ...(motivo ? { motivo } : {}),
+        },
+      },
+    )
+    return data
+  },
 }
+
+export type TipoItemVenta = 'producto' | 'servicio' | 'combo'

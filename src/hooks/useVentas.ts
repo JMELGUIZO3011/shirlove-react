@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ventaService } from '@/services/ventaService'
+import { ventaService, type TipoItemVenta } from '@/services/ventaService'
 import { getApiErrorMessage } from '@/lib/apiError'
 import type { VentaPayload } from '@/types/venta'
 
@@ -84,6 +84,34 @@ export function useEliminarVenta() {
     },
     onError: (error) => {
       toast.error(getApiErrorMessage(error, 'No se pudo anular la venta'))
+    },
+  })
+}
+
+export function useEliminarItemVenta() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      ventaId,
+      tipo,
+      itemId,
+      bodegaId,
+      motivo,
+    }: {
+      ventaId: number
+      tipo: TipoItemVenta
+      itemId: number
+      bodegaId?: number
+      motivo?: string
+    }) => ventaService.eliminarItemVenta(ventaId, tipo, itemId, bodegaId, motivo),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['reporte'] })
+      qc.invalidateQueries({ queryKey: ['inventario'] })
+      qc.invalidateQueries({ queryKey: ['registros'] })
+      toast.success(data.message)
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'No se pudo anular el item'))
     },
   })
 }
