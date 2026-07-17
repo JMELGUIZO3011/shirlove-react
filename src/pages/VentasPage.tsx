@@ -12,7 +12,8 @@ import {
   Warehouse,
 } from 'lucide-react'
 import { useClientes } from '@/hooks/useClientes'
-import { nombreCompleto } from '@/types/cliente'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { nombreCompleto, type Cliente } from '@/types/cliente'
 import {
   useBodegas,
   useCombos,
@@ -51,7 +52,11 @@ import {
 } from '@/components/ui/select'
 
 export function VentasPage() {
-  const clientesQ = useClientes()
+  // Búsqueda de clientes en servidor (con debounce) para no depender de una
+  // lista pre-cargada que puede dejar fuera a clientes recién registrados.
+  const [clienteSearch, setClienteSearch] = useState('')
+  const debouncedClienteSearch = useDebouncedValue(clienteSearch, 300)
+  const clientesQ = useClientes({ search: debouncedClienteSearch, limit: 20 })
   const bodegasQ = useBodegas()
   const productosQ = useProductos()
   const serviciosQ = useServicios()
@@ -60,7 +65,7 @@ export function VentasPage() {
   const metodosPagoQ = useMetodosPago()
   const registrarVenta = useRegistrarVenta()
 
-  const clientes = clientesQ.data ?? []
+  const clienteResults = clientesQ.data ?? []
   const bodegas = bodegasQ.data ?? []
   const productos = productosQ.data ?? []
   const servicios = serviciosQ.data ?? []
@@ -71,7 +76,7 @@ export function VentasPage() {
   )
   const metodosPago = metodosPagoQ.data ?? []
 
-  const [clienteId, setClienteId] = useState('')
+  const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null)
   const [bodegaId, setBodegaId] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [pagos, setPagos] = useState<PagoSeleccionado[]>([])
@@ -82,8 +87,14 @@ export function VentasPage() {
   const [servicioSel, setServicioSel] = useState<Servicio | null>(null)
   const [comboSel, setComboSel] = useState<Combo | null>(null)
 
-  const cliente = clientes.find((c) => String(c.id) === clienteId)
+  const cliente = selectedCliente
+  const clienteId = selectedCliente ? String(selectedCliente.id) : ''
   const bodega = bodegas.find((b) => String(b.id) === bodegaId)
+
+  function handleSelectCliente(value: string) {
+    const found = clienteResults.find((c) => String(c.id) === value)
+    if (found) setSelectedCliente(found)
+  }
 
   const total = useMemo(
     () => cart.reduce((sum, item) => sum + cartItemSubtotal(item), 0),
@@ -91,11 +102,26 @@ export function VentasPage() {
   )
 
   // Opciones de comboboxes
-  const clienteOptions: ComboboxOption[] = clientes.map((c) => ({
-    value: String(c.id),
-    label: nombreCompleto(c),
-    keywords: String(c.documentoidentidad),
-  }))
+  const clienteOptions: ComboboxOption[] = useMemo(() => {
+    const opts = (clientesQ.data ?? []).map((c) => ({
+      value: String(c.id),
+      label: nombreCompleto(c),
+      keywords: String(c.documentoidentidad),
+    }))
+    // Conservar el cliente ya seleccionado aunque no esté en los resultados
+    // actuales, para que su nombre siga visible en el selector.
+    if (
+      selectedCliente &&
+      !opts.some((o) => o.value === String(selectedCliente.id))
+    ) {
+      opts.unshift({
+        value: String(selectedCliente.id),
+        label: nombreCompleto(selectedCliente),
+        keywords: String(selectedCliente.documentoidentidad),
+      })
+    }
+    return opts
+  }, [clientesQ.data, selectedCliente])
   const productoOptions: ComboboxOption[] = productos.map((p) => ({
     value: String(p.id),
     label: p.nombre,
@@ -125,7 +151,8 @@ export function VentasPage() {
   }
 
   function resetForm() {
-    setClienteId('')
+    setSelectedCliente(null)
+    setClienteSearch('')
     setBodegaId('')
     setCart([])
     setPagos([])
@@ -210,11 +237,16 @@ export function VentasPage() {
                 <Combobox
                   options={clienteOptions}
                   value={clienteId}
-                  onSelect={setClienteId}
+                  onSelect={handleSelectCliente}
+                  onSearchChange={setClienteSearch}
+                  loading={clientesQ.isFetching}
                   placeholder="Seleccione un cliente"
                   searchPlaceholder="Buscar por nombre o documento..."
-                  emptyText="Sin clientes"
-                  disabled={clientesQ.isLoading}
+                  emptyText={
+                    debouncedClienteSearch
+                      ? 'Sin coincidencias'
+                      : 'Escriba para buscar un cliente'
+                  }
                 />
               </div>
               <div className="space-y-1.5">

@@ -2,12 +2,30 @@ import { apiClient } from '@/lib/apiClient'
 import { ApiEndpoints } from '@/config/api'
 import type { Cliente, ClientePayload } from '@/types/cliente'
 
+export type ClienteSort = 'nombre' | 'documento' | 'cumpleanos' | 'recientes'
+
+export interface ClienteQuery {
+  search?: string
+  sort?: ClienteSort
+  skip?: number
+  limit?: number
+}
+
 // Equivalente a lib/services/cliente_service.dart
 export const clienteService = {
-  async getAll(): Promise<Cliente[]> {
-    // Cargamos la cartera completa; la búsqueda/orden se hace en el cliente.
+  // La búsqueda y el orden se resuelven en el servidor para que la
+  // paginación no oculte clientes (p. ej. los del final del alfabeto).
+  async list({ search, sort = 'nombre', skip = 0, limit = 100 }: ClienteQuery = {}): Promise<
+    Cliente[]
+  > {
+    const term = search?.trim()
     const { data } = await apiClient.get<Cliente[]>(ApiEndpoints.clientes, {
-      params: { limit: 1000 },
+      params: {
+        ...(term ? { search: term } : {}),
+        sort,
+        skip,
+        limit,
+      },
     })
     return data
   },

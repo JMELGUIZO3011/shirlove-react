@@ -1,15 +1,21 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { clienteService } from '@/services/clienteService'
+import { clienteService, type ClienteQuery } from '@/services/clienteService'
 import { getApiErrorMessage } from '@/lib/apiError'
 import type { Cliente, ClientePayload } from '@/types/cliente'
 
 const CLIENTES_KEY = ['clientes'] as const
 
-export function useClientes() {
+/**
+ * Lista clientes con búsqueda/orden/paginación resueltos en el servidor.
+ * Cada combinación de parámetros es su propia entrada de caché.
+ */
+export function useClientes(params: ClienteQuery = {}) {
+  const { search = '', sort = 'nombre', skip = 0, limit = 100 } = params
   return useQuery({
-    queryKey: CLIENTES_KEY,
-    queryFn: clienteService.getAll,
+    queryKey: [...CLIENTES_KEY, { search: search.trim(), sort, skip, limit }],
+    queryFn: () => clienteService.list({ search, sort, skip, limit }),
+    placeholderData: keepPreviousData,
   })
 }
 

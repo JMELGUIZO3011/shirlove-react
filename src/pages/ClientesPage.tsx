@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   AlertCircle,
   Loader2,
@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react'
 import { useClientes } from '@/hooks/useClientes'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import type { Cliente } from '@/types/cliente'
 import { nombreCompleto } from '@/types/cliente'
 import { PageHeader } from '@/components/PageHeader'
@@ -43,34 +44,8 @@ import {
 
 type SortKey = 'nombre' | 'documento' | 'cumpleanos' | 'recientes'
 
-// Normaliza texto para búsquedas (minúsculas, sin acentos).
-const normalize = (s: string) =>
-  s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-
-function matchesSearch(cliente: Cliente, terms: string[]): boolean {
-  if (terms.length === 0) return true
-  const haystack = normalize(
-    [
-      cliente.nombre,
-      cliente.apellido,
-      String(cliente.documentoidentidad),
-      cliente.email ?? '',
-      cliente.telefono ?? '',
-    ].join(' '),
-  )
-  // Todos los términos deben aparecer (AND), igual que el backend /search.
-  return terms.every((t) => haystack.includes(t))
-}
-
-function birthdayKey(value: string | null): number {
-  if (!value) return 9999
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return 9999
-  return (d.getMonth() + 1) * 100 + d.getDate()
-}
+// Cuántos clientes se traen por página; "Cargar más" amplía este límite.
+const PAGE_SIZE = 50
 
 function formatCumple(value: string | null): string {
   if (!value) return '—'
@@ -80,44 +55,39 @@ function formatCumple(value: string | null): string {
 }
 
 export function ClientesPage() {
-  const { data: clientes = [], isLoading, isError, error, refetch } =
-    useClientes()
-
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('nombre')
+  const [page, setPage] = useState(1)
+
+  const debouncedSearch = useDebouncedValue(search.trim(), 300)
+
+  // La búsqueda, el orden y la paginación se resuelven en el servidor.
+  const {
+    data: clientes = [],
+    isLoading,
+    isFetching,
+    isError,
+    error,
+    refetch,
+  } = useClientes({
+    search: debouncedSearch,
+    sort: sortKey,
+    limit: PAGE_SIZE * page,
+  })
+
+  // Al cambiar la búsqueda o el orden, volver a la primera página.
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch, sortKey])
+
+  // Si la última página vino llena, es probable que haya más registros.
+  const hasMore = clientes.length === PAGE_SIZE * page
 
   // Diálogos
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Cliente | null>(null)
   const [details, setDetails] = useState<Cliente | null>(null)
   const [toDelete, setToDelete] = useState<Cliente | null>(null)
-
-  const filtered = useMemo(() => {
-    const terms = normalize(search.trim()).split(/\s+/).filter(Boolean)
-    const list = clientes.filter((c) => matchesSearch(c, terms))
-    const sorted = [...list]
-    switch (sortKey) {
-      case 'nombre':
-        sorted.sort((a, b) =>
-          nombreCompleto(a).localeCompare(nombreCompleto(b), 'es'),
-        )
-        break
-      case 'documento':
-        sorted.sort((a, b) => a.documentoidentidad - b.documentoidentidad)
-        break
-      case 'cumpleanos':
-        sorted.sort((a, b) => birthdayKey(a.cumpleanos) - birthdayKey(b.cumpleanos))
-        break
-      case 'recientes':
-        sorted.sort(
-          (a, b) =>
-            new Date(b.fechaDeCreacion).getTime() -
-            new Date(a.fechaDeCreacion).getTime(),
-        )
-        break
-    }
-    return sorted
-  }, [clientes, search, sortKey])
 
   function openCreate() {
     setEditing(null)
@@ -193,15 +163,15 @@ export function ClientesPage() {
                 Reintentar
               </Button>
             </div>
-          ) : filtered.length === 0 ? (
+          ) : clientes.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-20 text-center text-muted-foreground">
               <UserSearch className="h-10 w-10" />
               <p>
-                {clientes.length === 0
-                  ? 'Aún no hay clientes registrados'
-                  : 'No se encontraron clientes con esa búsqueda'}
+                {debouncedSearch
+                  ? 'No se encontraron clientes con esa búsqueda'
+                  : 'Aún no hay clientes registrados'}
               </p>
-              {clientes.length === 0 && (
+              {!debouncedSearch && (
                 <Button variant="secondary" onClick={openCreate}>
                   <Plus className="h-4 w-4" />
                   Crear el primero
@@ -221,7 +191,7 @@ export function ClientesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((cliente) => (
+                {clientes.map((cliente) => (
                   <TableRow
                     key={cliente.id}
                     className="cursor-pointer"
@@ -282,12 +252,25 @@ export function ClientesPage() {
           )}
         </div>
 
-        {!isLoading && !isError && filtered.length > 0 && (
-          <p className="mt-3 text-right text-xs text-muted-foreground">
-            {filtered.length}
-            {filtered.length === 1 ? ' cliente' : ' clientes'}
-            {search && ` de ${clientes.length}`}
-          </p>
+        {!isLoading && !isError && clientes.length > 0 && (
+          <div className="mt-3 flex flex-col items-center gap-3">
+            {hasMore && (
+              <Button
+                variant="outline"
+                onClick={() => setPage((p) => p + 1)}
+                disabled={isFetching}
+              >
+                {isFetching && <Loader2 className="h-4 w-4 animate-spin" />}
+                Cargar más
+              </Button>
+            )}
+            <p className="w-full text-right text-xs text-muted-foreground">
+              {clientes.length}
+              {clientes.length === 1 ? ' cliente' : ' clientes'}
+              {hasMore ? '+' : ''}
+              {debouncedSearch && ' encontrados'}
+            </p>
+          </div>
         )}
       </div>
 

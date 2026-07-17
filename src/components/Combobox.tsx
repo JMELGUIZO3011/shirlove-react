@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check, ChevronsUpDown, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -35,6 +35,14 @@ interface Props {
   className?: string
   /** Si es true, no conserva el valor seleccionado como etiqueta (modo "acción"). */
   actionMode?: boolean
+  /**
+   * Notifica cada cambio del texto de búsqueda. Actívalo para búsquedas en
+   * servidor: al recibirlo, el componente deja de filtrar localmente y muestra
+   * exactamente las `options` que le pase el padre.
+   */
+  onSearchChange?: (query: string) => void
+  /** Muestra un indicador de carga mientras llegan resultados del servidor. */
+  loading?: boolean
 }
 
 // Selector con búsqueda reutilizable (reemplaza dropdown_search de Flutter).
@@ -48,12 +56,25 @@ export function Combobox({
   disabled,
   className,
   actionMode = false,
+  onSearchChange,
+  loading = false,
 }: Props) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const selected = options.find((o) => o.value === value)
+  // Con búsqueda en servidor el padre ya envía las opciones filtradas.
+  const serverSide = onSearchChange !== undefined
+
+  function handleOpenChange(next: boolean) {
+    setOpen(next)
+    if (!next && serverSide) {
+      setQuery('')
+      onSearchChange('')
+    }
+  }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -74,14 +95,33 @@ export function Combobox({
         align="start"
       >
         <Command
+          shouldFilter={!serverSide}
           filter={(value, search, keywords) => {
             const haystack = `${value} ${keywords?.join(' ') ?? ''}`.toLowerCase()
             return haystack.includes(search.toLowerCase()) ? 1 : 0
           }}
         >
-          <CommandInput placeholder={searchPlaceholder} />
+          <CommandInput
+            placeholder={searchPlaceholder}
+            value={serverSide ? query : undefined}
+            onValueChange={
+              serverSide
+                ? (v) => {
+                    setQuery(v)
+                    onSearchChange(v)
+                  }
+                : undefined
+            }
+          />
           <CommandList>
-            <CommandEmpty>{emptyText}</CommandEmpty>
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin text-gold" />
+                Buscando...
+              </div>
+            ) : (
+              <CommandEmpty>{emptyText}</CommandEmpty>
+            )}
             {options.map((option) => (
               <CommandItem
                 key={option.value}
