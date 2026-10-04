@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { AutocompleteInput, type AutocompleteOption } from '@/components/AutocompleteInput'
 import { Label } from '@/components/ui/label'
 
 const CATEGORIAS_SUGERIDAS = ['Cabello', 'Uñas', 'Pestañas', 'Cejas', 'Facial', 'Maquillaje', 'Otros']
@@ -62,13 +63,17 @@ export function UsaServicioFormDialog({ open, onOpenChange, servicio, categorias
     return [...set].sort((a, b) => a.localeCompare(b, 'es'))
   }, [categorias, serviciosColombia])
 
-  const nombresColombia = useMemo(
-    () =>
-      [...new Set(serviciosColombia.map((s) => s.nombre.trim()).filter(Boolean))].sort((a, b) =>
-        a.localeCompare(b, 'es'),
-      ),
-    [serviciosColombia],
-  )
+  const opcionesNombre: AutocompleteOption[] = useMemo(() => {
+    const vistos = new Set<string>()
+    const out: AutocompleteOption[] = []
+    for (const s of serviciosColombia) {
+      const n = s.nombre.trim()
+      if (!n || vistos.has(n.toLowerCase())) continue
+      vistos.add(n.toLowerCase())
+      out.push({ value: n, detail: s.categoria })
+    }
+    return out.sort((a, b) => a.value.localeCompare(b.value, 'es'))
+  }, [serviciosColombia])
 
   function handleNombreChange(valor: string) {
     setNombre(valor)
@@ -108,34 +113,27 @@ export function UsaServicioFormDialog({ open, onOpenChange, servicio, categorias
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="usa-serv-cat">Categoría</Label>
-            <Input
+            <AutocompleteInput
               id="usa-serv-cat"
-              list="usa-categorias-servicio"
               value={categoria}
-              onChange={(e) => setCategoria(e.target.value)}
+              onChange={setCategoria}
+              options={opcionesCategoria.map((c) => ({ value: c }))}
+              heading="Categorías"
+              createLabel={(t) => `Crear categoría «${t}»`}
               placeholder="Ej: Cabello"
             />
-            <datalist id="usa-categorias-servicio">
-              {opcionesCategoria.map((c) => (
-                <option key={c} value={c} />
-              ))}
-            </datalist>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="usa-serv-nombre">Nombre</Label>
-            <Input
+            <AutocompleteInput
               id="usa-serv-nombre"
-              list="usa-servicios-colombia"
-              autoComplete="off"
               value={nombre}
-              onChange={(e) => handleNombreChange(e.target.value)}
+              onChange={handleNombreChange}
+              options={opcionesNombre}
+              heading="Del catálogo de Colombia"
+              createLabel={(t) => `Crear «${t}» como servicio nuevo`}
               placeholder="Ej: Keratina"
             />
-            <datalist id="usa-servicios-colombia">
-              {nombresColombia.map((n) => (
-                <option key={n} value={n} />
-              ))}
-            </datalist>
             {!isEdit && (
               <p className="text-xs text-muted-foreground">
                 Puede elegir un servicio del catálogo de Colombia o escribir uno nuevo. Solo se

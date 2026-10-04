@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { AutocompleteInput, type AutocompleteOption } from '@/components/AutocompleteInput'
 import { Label } from '@/components/ui/label'
 
 interface Props {
@@ -38,13 +39,18 @@ export function UsaProductoFormDialog({ open, onOpenChange, producto }: Props) {
   // Catálogo de Colombia: solo se usa para SUGERIR nombres (y precios en USD si
   // existen). El producto USA se crea aparte; no se relaciona con el de Colombia.
   const colombiaQ = useProductosColombia()
-  const nombresColombia = useMemo(
-    () =>
-      [...new Set((colombiaQ.data ?? []).map((p) => p.nombre.trim()).filter(Boolean))].sort(
-        (a, b) => a.localeCompare(b, 'es'),
-      ),
-    [colombiaQ.data],
-  )
+  const opcionesColombia: AutocompleteOption[] = useMemo(() => {
+    const vistos = new Set<string>()
+    const out: AutocompleteOption[] = []
+    for (const p of colombiaQ.data ?? []) {
+      const n = p.nombre.trim()
+      if (!n || vistos.has(n.toLowerCase())) continue
+      vistos.add(n.toLowerCase())
+      const { venta } = preciosUsaDeColombia(p)
+      out.push({ value: n, detail: venta !== null ? formatUSD(venta) : undefined })
+    }
+    return out.sort((a, b) => a.value.localeCompare(b.value, 'es'))
+  }, [colombiaQ.data])
 
   function handleNombreChange(valor: string) {
     setNombre(valor)
@@ -120,19 +126,15 @@ export function UsaProductoFormDialog({ open, onOpenChange, producto }: Props) {
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="usa-prod-nombre">Nombre</Label>
-            <Input
+            <AutocompleteInput
               id="usa-prod-nombre"
-              list="usa-productos-colombia"
-              autoComplete="off"
               value={nombre}
-              onChange={(e) => handleNombreChange(e.target.value)}
+              onChange={handleNombreChange}
+              options={opcionesColombia}
+              heading="Del catálogo de Colombia"
+              createLabel={(t) => `Crear «${t}» como producto nuevo`}
               placeholder="Ej: Keratina 8oz"
             />
-            <datalist id="usa-productos-colombia">
-              {nombresColombia.map((n) => (
-                <option key={n} value={n} />
-              ))}
-            </datalist>
             {!isEdit && (
               <p className="text-xs text-muted-foreground">
                 Puede elegir un nombre del catálogo de Colombia o escribir uno nuevo. Solo se

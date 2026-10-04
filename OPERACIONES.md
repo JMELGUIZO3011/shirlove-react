@@ -154,6 +154,13 @@ Notas de API:
   Solo se copia el nombre (y la categoría en servicios); si el producto de Colombia ya
   tenía precios para el país USA, se proponen como precio/costo iniciales. No se crea
   ninguna relación entre ambos catálogos.
+- En la venta USA, el campo **clienta** sugiere nombres de la base de clientes de Colombia
+  (`/api/clientes?search=` con debounce) y también admite un nombre nuevo. La venta guarda
+  el nombre como texto libre (`cliente_nombre`), sin FK a `clientes`.
+- Estas sugerencias usan `components/AutocompleteInput.tsx` (texto libre + desplegable
+  estilizado, navegable con ↑ ↓ Enter Esc, fila "crear nuevo"); reemplaza al `<datalist>`
+  nativo, que no se puede estilizar. Admite filtro local o resultados ya filtrados por el
+  servidor (`filter={false}` + `loading`).
 - **Nada del módulo USA aparece en Reportes, Inventario, Ventas ni Gastos de Colombia**, ni
   al revés: son tablas distintas.
 - **Equivalente en COP (Historial)**: la tasa USD→COP se obtiene de `open.er-api.com`

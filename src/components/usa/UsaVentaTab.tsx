@@ -12,10 +12,14 @@ import {
   User,
 } from 'lucide-react'
 import { useUsaProductos, useUsaRegistrarVenta, useUsaServicios } from '@/hooks/useUsa'
+import { useClientes } from '@/hooks/useClientes'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { nombreCompleto } from '@/types/cliente'
 import { usaCartItemSubtotal, type UsaCartItem, type UsaVentaPayload } from '@/types/usa'
 import { formatUSD } from '@/lib/format'
 import { dateWithCurrentTime, toLocalDateTimeISO } from '@/lib/dateRange'
 import { Combobox, type ComboboxOption } from '@/components/Combobox'
+import { AutocompleteInput, type AutocompleteOption } from '@/components/AutocompleteInput'
 import { UsaItemDialog, type UsaItemSeleccion } from '@/components/usa/UsaItemDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,6 +50,24 @@ export function UsaVentaTab({ metodosPago }: Props) {
 
   const [cliente, setCliente] = useState('')
   const [metodoPago, setMetodoPago] = useState('')
+
+  // Sugerencias de clientas desde la base de clientes de Colombia (búsqueda en
+  // servidor con debounce). Solo se copia el nombre: la venta USA guarda texto
+  // libre y no queda ligada al registro de Colombia.
+  const clienteBusqueda = useDebouncedValue(cliente, 300)
+  const clientesQ = useClientes({ search: clienteBusqueda, limit: 8 })
+  const clienteOptions: AutocompleteOption[] = useMemo(() => {
+    const vistos = new Set<string>()
+    const out: AutocompleteOption[] = []
+    for (const c of clientesQ.data ?? []) {
+      const n = nombreCompleto(c)
+      if (!n || vistos.has(n.toLowerCase())) continue
+      vistos.add(n.toLowerCase())
+      const detalle = c.telefono?.trim() || (c.documentoidentidad ? `CC ${c.documentoidentidad}` : undefined)
+      out.push({ value: n, detail: detalle })
+    }
+    return out
+  }, [clientesQ.data])
   const [fecha, setFecha] = useState('')
   const [notas, setNotas] = useState('')
   const [cart, setCart] = useState<UsaCartItem[]>([])
@@ -137,9 +159,14 @@ export function UsaVentaTab({ metodosPago }: Props) {
               <Label className="flex items-center gap-1.5 text-navy">
                 <User className="h-4 w-4" /> Cliente (opcional)
               </Label>
-              <Input
+              <AutocompleteInput
                 value={cliente}
-                onChange={(e) => setCliente(e.target.value)}
+                onChange={setCliente}
+                options={clienteOptions}
+                filter={false}
+                loading={clientesQ.isFetching && clienteOptions.length === 0}
+                heading="Clientas registradas"
+                createLabel={(t) => `Registrar a nombre de «${t}»`}
                 placeholder="Nombre de la clienta"
               />
             </div>
