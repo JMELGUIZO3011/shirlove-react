@@ -156,6 +156,13 @@ Notas de API:
   ninguna relación entre ambos catálogos.
 - **Nada del módulo USA aparece en Reportes, Inventario, Ventas ni Gastos de Colombia**, ni
   al revés: son tablas distintas.
+- **Equivalente en COP (Historial)**: la tasa USD→COP se obtiene de `open.er-api.com`
+  (ExchangeRate-API, gratuita, tasa de mercado actualizada a diario; Google no ofrece API
+  pública). `services/tasaCambioService.ts` + `hooks/useTasaCambio.ts`: se refresca cada
+  10 min y al volver a la pestaña, guarda la última tasa en `localStorage` como respaldo
+  si la fuente falla, y se consulta con axios "pelado" (nunca con `apiClient`, para no
+  enviar el token del panel a un tercero). La usuaria puede escribir una tasa manual. Los
+  COP son referenciales: la contabilidad del módulo sigue siendo en USD.
 
 ---
 

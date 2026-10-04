@@ -1,6 +1,7 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useCallback, useState } from 'react'
 import {
   AlertCircle,
+  ArrowLeftRight,
   Ban,
   ChevronDown,
   ChevronRight,
@@ -8,13 +9,16 @@ import {
   Loader2,
   Package,
   Receipt,
+  RefreshCw,
   Sparkles,
   TrendingUp,
+  X,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useUsaAnularVenta, useUsaResumen, useUsaVentas } from '@/hooks/useUsa'
+import { useTasaUsdCop } from '@/hooks/useTasaCambio'
 import { presetRange, type DateRange } from '@/lib/dateRange'
-import { formatFechaHora, formatUSD } from '@/lib/format'
+import { formatCOP, formatFechaHora, formatUSD } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { UsaVenta } from '@/types/usa'
 import { DateRangeControl } from '@/components/reportes/DateRangeControl'
@@ -55,6 +59,19 @@ export function UsaHistorialTab() {
   const resumenQ = useUsaResumen(range)
   const anular = useUsaAnularVenta()
 
+  // Tasa USD -> COP: automática (fuente externa, se refresca sola) o manual.
+  const tasaQ = useTasaUsdCop()
+  const [tasaManual, setTasaManual] = useState('')
+  const tasaManualNum = Number(tasaManual)
+  const usaManual = tasaManual.trim() !== '' && Number.isFinite(tasaManualNum) && tasaManualNum > 0
+  const tasa: number | null = usaManual ? tasaManualNum : (tasaQ.data?.tasa ?? null)
+
+  // Equivalente en COP de un monto en USD (o '—' si aún no hay tasa).
+  const cop = useCallback(
+    (usd: number) => (tasa ? formatCOP(usd * tasa) : '—'),
+    [tasa],
+  )
+
   const ventas = ventasQ.data ?? []
   const resumen = resumenQ.data
 
@@ -73,29 +90,103 @@ export function UsaHistorialTab() {
     <div className="space-y-4">
       <DateRangeControl value={range} onChange={setRange} />
 
+      {/* Tasa de cambio para los equivalentes en pesos colombianos */}
+      <div className="rounded-xl border bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-navy">
+              <ArrowLeftRight className="h-4 w-4" />
+              <h3 className="text-sm font-semibold">Equivalente en pesos colombianos</h3>
+            </div>
+            {tasa ? (
+              <p className="mt-1 text-lg font-bold tabular-nums text-navy">
+                1 USD = {formatTasa(tasa)} COP
+              </p>
+            ) : tasaQ.isLoading ? (
+              <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin text-gold" /> Consultando tasa...
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-destructive">
+                No se pudo obtener la tasa. Ingrese una manualmente.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {usaManual
+                ? 'Tasa ingresada manualmente'
+                : tasaQ.data
+                  ? `${tasaQ.data.fuente}${tasaQ.data.origen === 'cache' ? ' · última tasa guardada' : ''} · actualizada ${formatFechaHora(tasaQ.data.actualizada)}`
+                  : 'Los montos en COP son referenciales; la contabilidad del módulo es en USD.'}
+            </p>
+          </div>
+          <div className="flex items-end gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="usa-tasa-manual" className="text-xs">
+                Usar otra tasa (COP por USD)
+              </Label>
+              <div className="flex items-center gap-1">
+                <Input
+                  id="usa-tasa-manual"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="h-9 w-36"
+                  placeholder={tasaQ.data ? formatTasa(tasaQ.data.tasa) : 'Ej: 4000'}
+                  value={tasaManual}
+                  onChange={(e) => setTasaManual(e.target.value)}
+                />
+                {tasaManual && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9"
+                    onClick={() => setTasaManual('')}
+                    aria-label="Volver a la tasa automática"
+                    title="Volver a la tasa automática"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => tasaQ.refetch()}
+              disabled={tasaQ.isFetching}
+              aria-label="Actualizar tasa"
+              title="Actualizar tasa"
+            >
+              <RefreshCw className={cn('h-4 w-4', tasaQ.isFetching && 'animate-spin')} />
+            </Button>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard
           label="Ingresos"
           value={formatUSD(resumen?.ingresos ?? 0)}
-          subtitle={`${resumen?.numero_ventas ?? 0} venta(s)`}
+          subtitle={`≈ ${cop(resumen?.ingresos ?? 0)} · ${resumen?.numero_ventas ?? 0} venta(s)`}
           icon={DollarSign}
         />
         <StatCard
           label="Productos"
           value={formatUSD(resumen?.ingresos_productos ?? 0)}
-          subtitle={`${resumen?.unidades_vendidas ?? 0} unidad(es)`}
+          subtitle={`≈ ${cop(resumen?.ingresos_productos ?? 0)} · ${resumen?.unidades_vendidas ?? 0} unidad(es)`}
           icon={Package}
         />
         <StatCard
           label="Servicios"
           value={formatUSD(resumen?.ingresos_servicios ?? 0)}
-          subtitle={`${resumen?.servicios_prestados ?? 0} servicio(s)`}
+          subtitle={`≈ ${cop(resumen?.ingresos_servicios ?? 0)} · ${resumen?.servicios_prestados ?? 0} servicio(s)`}
           icon={Sparkles}
         />
         <StatCard
           label="Ganancia bruta"
           value={formatUSD(resumen?.ganancia_bruta ?? 0)}
-          subtitle={`Costo productos ${formatUSD(resumen?.costo_productos ?? 0)}`}
+          subtitle={`≈ ${cop(resumen?.ganancia_bruta ?? 0)} · costo ${formatUSD(resumen?.costo_productos ?? 0)}`}
           icon={TrendingUp}
           tone="positive"
         />
@@ -113,6 +204,7 @@ export function UsaHistorialTab() {
                 <span className="text-muted-foreground">{m.metodo_pago}</span>
                 <span className="font-semibold tabular-nums">{formatUSD(m.monto)}</span>
                 <span className="text-xs text-muted-foreground">({m.ventas})</span>
+                <span className="text-xs tabular-nums text-muted-foreground">≈ {cop(m.monto)}</span>
               </div>
             ))}
           </div>
@@ -192,8 +284,11 @@ export function UsaHistorialTab() {
                           {v.items.length}
                         </TableCell>
                         <TableCell className="text-right font-semibold tabular-nums text-navy">
-                          <div className="flex flex-col items-end gap-1">
+                          <div className="flex flex-col items-end gap-0.5">
                             {formatUSD(v.total)}
+                            <span className="text-xs font-normal tabular-nums text-muted-foreground">
+                              ≈ {cop(v.total)}
+                            </span>
                             {v.anulada && <Badge variant="outline" className="text-destructive">Anulada</Badge>}
                           </div>
                         </TableCell>
@@ -227,7 +322,12 @@ export function UsaHistorialTab() {
                                         {i.cantidad} × {formatUSD(i.precio_unitario)}
                                       </span>
                                     </div>
-                                    <span className="font-medium tabular-nums">{formatUSD(i.subtotal)}</span>
+                                    <span className="text-right">
+                                      <span className="font-medium tabular-nums">{formatUSD(i.subtotal)}</span>
+                                      <span className="block text-xs tabular-nums text-muted-foreground">
+                                        ≈ {cop(i.subtotal)}
+                                      </span>
+                                    </span>
                                   </li>
                                 ))}
                               </ul>
@@ -282,4 +382,13 @@ export function UsaHistorialTab() {
       </AlertDialog>
     </div>
   )
+}
+
+const tasaFormatter = new Intl.NumberFormat('es-CO', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
+function formatTasa(valor: number): string {
+  return `$${tasaFormatter.format(valor)}`
 }
