@@ -10,6 +10,7 @@ import {
   Wallet,
   Package,
   Pencil,
+  Globe,
   LogOut,
   UserPlus,
   ChevronRight,
@@ -99,6 +100,15 @@ const MENU_ITEMS: MenuItem[] = [
     color: '#0d9488',
     route: '/productos',
     adminOnly: true,
+  },
+  {
+    // Operación en Estados Unidos: datos separados de Colombia y protegido
+    // con contraseña propia (se pide al entrar).
+    title: 'Módulo USA',
+    icon: Globe,
+    color: '#1d4ed8',
+    route: '/usa',
+    adminOnly: false,
   },
 ]
 

@@ -80,7 +80,16 @@ src/
   gestionar sus precios por tipo y país (agregar/editar/eliminar). Crear producto con
   precios iniciales y editar nombre. Formato COP/USD según país.
 
-**✅ Migración completa** — los 10 módulos del panel Flutter están migrados a React.
+- **Módulo USA** — operación del local en Estados Unidos, **totalmente separada** de la
+  contabilidad e inventarios de Colombia (tablas propias `usa_*`, montos en USD). Entrada
+  protegida con una **contraseña propia del módulo** (además del login). Pestañas: Nueva
+  venta (productos + servicios USA), Historial (KPIs del período, por método de pago,
+  detalle y anulación), Inventario (existencias, entradas, ajustes, movimientos) y
+  Catálogo (productos y servicios USA). El admin configura/cambia la contraseña desde el
+  propio módulo.
+
+**✅ Migración completa** — los 10 módulos del panel Flutter están migrados a React, más el
+Módulo USA (nuevo).
 
 Cada módulo pendiente tiene su ruta y tarjeta funcionando; se irán migrando página
 por página tomando como referencia el proyecto Flutter en `../shirlove_admin/lib/pages`.

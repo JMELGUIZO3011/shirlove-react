@@ -34,3 +34,11 @@ export function formatFecha(value: string | Date): string {
   const d = typeof value === 'string' ? new Date(value) : value
   return Number.isNaN(d.getTime()) ? String(value) : dateFormatter.format(d)
 }
+
+// Fecha y hora cortas (dd/mm/aaaa hh:mm) en hora local del navegador.
+export function formatFechaHora(value: string | Date): string {
+  const d = typeof value === 'string' ? new Date(value) : value
+  if (Number.isNaN(d.getTime())) return String(value)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}

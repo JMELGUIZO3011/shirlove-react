@@ -39,6 +39,9 @@ const GestionProductosPage = lazy(() =>
     default: m.GestionProductosPage,
   })),
 )
+const UsaPage = lazy(() =>
+  import('@/pages/UsaPage').then((m) => ({ default: m.UsaPage })),
+)
 
 export default function App() {
   const { initializing } = useAuth()
@@ -147,6 +150,15 @@ export default function App() {
         element={
           <ProtectedRoute requireAdmin>
             <GestionProductosPage />
+          </ProtectedRoute>
+        }
+      />
+      {/* Módulo USA: cualquier usuario con sesión, pero protegido por la contraseña del módulo */}
+      <Route
+        path="/usa"
+        element={
+          <ProtectedRoute>
+            <UsaPage />
           </ProtectedRoute>
         }
       />

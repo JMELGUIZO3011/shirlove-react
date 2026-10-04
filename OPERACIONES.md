@@ -101,10 +101,27 @@ El backend se mantuvo casi intacto; solo se agregaron **funciones nuevas pedidas
 
 ---
 
+3. **Módulo USA** — `app/routers/usa.py` + modelos `Usa*` en `app/models.py`
+   (prefijo `/api/usa`). Tablas **nuevas e independientes** con prefijo `usa_`
+   (`usa_configuracion`, `usa_productos`, `usa_servicios`, `usa_inventario`,
+   `usa_movimientos_inventario`, `usa_ventas`, `usa_ventas_items`). Las crea
+   `Base.metadata.create_all` al arrancar: **no requiere script de migración**, solo
+   `git push heroku main`.
+   - Seguridad en dos capas: sesión normal del panel + **contraseña propia del módulo**.
+     `POST /api/usa/acceso` entrega un token de módulo (12 h) que viaja en el header
+     `X-USA-Token`. Si falta o venció, el back responde `403 USA_ACCESO_REQUERIDO` y el
+     front vuelve a pedir la contraseña.
+   - La contraseña la configura/cambia **solo un admin** (`POST /api/usa/password`). La
+     primera vez se configura desde la propia pantalla del módulo.
+   - Anular una venta USA (`DELETE /api/usa/ventas/{id}`) es solo admin: soft delete y
+     devuelve las unidades al inventario USA.
+
+---
+
 ## Módulos del panel (todos migrados)
 
 Auth/Home · Clientes · Ventas (POS) · Reportes · Inventario · Transformaciones ·
-Consumos Internos · Gastos · Combos · Gestión de Productos.
+Consumos Internos · Gastos · Combos · Gestión de Productos · **Módulo USA**.
 
 Patrón de cada módulo: `services/*` (axios) → `hooks/*` (TanStack Query + toasts) →
 `pages/*` + diálogos. Reutilizables clave: `PageHeader`, `Combobox`, `StatCard`,
@@ -116,6 +133,29 @@ Notas de API:
 - Hay **dos** `/api/productos`: el de inventario (precios anidados) y el de gestión de
   productos (`/api/productos/` con barra, precios planos).
 - Las bodegas no traen `pais_id` en `/api/bodegas` → se deriva por nombre (USA→2, resto→1).
+
+### Módulo USA (aislado de Colombia)
+
+- Ruta `/usa`, tarjeta "Módulo USA" en el Home (visible para cualquier usuario con sesión;
+  la contraseña del módulo es la que protege el acceso).
+- Archivos: `pages/UsaPage.tsx`, `components/usa/*`, `hooks/useUsa.ts`,
+  `services/usaService.ts`, `types/usa.ts`, `lib/usaAccess.ts`.
+- El token del módulo se guarda en `sessionStorage` (`usa_token`): al cerrar la pestaña hay
+  que volver a ingresar la contraseña. `apiClient` agrega el header `X-USA-Token` a todas
+  las rutas `/api/usa` y, si recibe `403 USA_ACCESO_REQUERIDO`, borra el token y dispara
+  el evento `usa-access-revoked` para que `UsaGate` vuelva a pedir la contraseña.
+- Todo en **USD** (`formatUSD`). Las cachés de TanStack Query cuelgan de `['usa', ...]` y
+  no se cruzan con las de Colombia.
+- Pestañas: Nueva venta (POS con productos/servicios USA), Historial (resumen + anular),
+  Inventario (existencias, entradas, ajustes, movimientos) y Catálogo (productos y
+  servicios USA con activar/desactivar).
+- Al crear un producto o servicio USA, el campo nombre **sugiere los del catálogo de
+  Colombia** (`/api/productos` y `/api/servicios-salon`) pero admite escribir uno nuevo.
+  Solo se copia el nombre (y la categoría en servicios); si el producto de Colombia ya
+  tenía precios para el país USA, se proponen como precio/costo iniciales. No se crea
+  ninguna relación entre ambos catálogos.
+- **Nada del módulo USA aparece en Reportes, Inventario, Ventas ni Gastos de Colombia**, ni
+  al revés: son tablas distintas.
 
 ---
 

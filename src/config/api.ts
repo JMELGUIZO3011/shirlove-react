@@ -26,4 +26,7 @@ export const ApiEndpoints = {
   nomina: '/api/nomina',
   consumosInternos: '/api/consumos-internos',
   gastos: '/api/gastos',
+
+  // Módulo USA (tablas y contabilidad independientes; requiere contraseña propia)
+  usa: '/api/usa',
 } as const
