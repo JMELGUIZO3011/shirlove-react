@@ -76,8 +76,9 @@ heroku run python <script>.py -a shirloveapp
 
 Scripts existentes (en `C:\shirloveApp`): `crear_tabla_gastos.py`,
 `crear_tabla_consumos_internos.py`, `crear_tabla_metodos_pago_mixtos.py`,
-`crear_tabla_pagos_nomina.py`, y **`agregar_anulacion_ventas.py`** (columnas de anulación
-de ventas — ver abajo). Son idempotentes (`IF NOT EXISTS`).
+`crear_tabla_pagos_nomina.py`, **`agregar_anulacion_ventas.py`** (columnas de anulación
+de ventas — ver abajo) y **`agregar_credito_usa_ventas.py`** (columnas de crédito /
+cuentas por cobrar en `usa_ventas`). Son idempotentes (`IF NOT EXISTS`).
 
 > Orden: primero `git push heroku` (para que el script esté en el dyno) y luego
 > `heroku run python <script>.py`.
@@ -115,6 +116,15 @@ El backend se mantuvo casi intacto; solo se agregaron **funciones nuevas pedidas
      primera vez se configura desde la propia pantalla del módulo.
    - Anular una venta USA (`DELETE /api/usa/ventas/{id}`) es solo admin: soft delete y
      devuelve las unidades al inventario USA.
+   - **Crédito / cuentas por cobrar**: una venta puede registrarse con `a_credito: true`
+     (método de pago "Crédito", `fecha_vencimiento` y `abono_inicial` opcionales). Queda
+     con `saldo_pendiente` y aparece en `GET /api/usa/cuentas-por-cobrar`. Los cobros se
+     registran con `POST /api/usa/ventas/{id}/abonos` (parciales o el saldo completo; al
+     llegar a 0 se marca `fecha_pago_total`); `DELETE .../abonos/{id}` (solo admin) revierte
+     un cobro. Tabla nueva `usa_ventas_abonos` (la crea `create_all`) + columnas en
+     `usa_ventas` → **migración `agregar_credito_usa_ventas.py`** (hay que correrla con
+     `heroku run` después del push). El resumen reparte lo cobrado por el método real de
+     cada abono y muestra el saldo como "Crédito (pendiente)".
 
 ---
 
@@ -146,9 +156,13 @@ Notas de API:
   el evento `usa-access-revoked` para que `UsaGate` vuelva a pedir la contraseña.
 - Todo en **USD** (`formatUSD`). Las cachés de TanStack Query cuelgan de `['usa', ...]` y
   no se cruzan con las de Colombia.
-- Pestañas: Nueva venta (POS con productos/servicios USA), Historial (resumen + anular),
-  Inventario (existencias, entradas, ajustes, movimientos) y Catálogo (productos y
-  servicios USA con activar/desactivar).
+- Pestañas: Nueva venta (POS con productos/servicios USA; interruptor "Venta a crédito"
+  con fecha límite y abono inicial opcionales), Historial (resumen + anular; las ventas a
+  crédito muestran el saldo que deben), **Por cobrar** (cuentas pendientes ordenadas por
+  vencidas primero, KPIs, botón "Cobrar" para abonos parciales o "Marcar como cobrada",
+  historial de cobros y eliminación de cobros para admin), Inventario (existencias,
+  entradas, ajustes, movimientos) y Catálogo (productos y servicios USA con
+  activar/desactivar).
 - Al crear un producto o servicio USA, el campo nombre **sugiere los del catálogo de
   Colombia** (`/api/productos` y `/api/servicios-salon`) pero admite escribir uno nuevo.
   Solo se copia el nombre (y la categoría en servicios); si el producto de Colombia ya

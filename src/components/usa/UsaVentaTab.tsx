@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
+  CalendarClock,
   CalendarDays,
   CreditCard,
+  HandCoins,
   Loader2,
   Package,
   ShoppingCart,
@@ -18,6 +20,7 @@ import { nombreCompleto } from '@/types/cliente'
 import { usaCartItemSubtotal, type UsaCartItem, type UsaVentaPayload } from '@/types/usa'
 import { formatUSD } from '@/lib/format'
 import { dateWithCurrentTime, toLocalDateTimeISO } from '@/lib/dateRange'
+import { cn } from '@/lib/utils'
 import { Combobox, type ComboboxOption } from '@/components/Combobox'
 import { AutocompleteInput, type AutocompleteOption } from '@/components/AutocompleteInput'
 import { UsaItemDialog, type UsaItemSeleccion } from '@/components/usa/UsaItemDialog'
@@ -26,6 +29,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -70,10 +74,16 @@ export function UsaVentaTab({ metodosPago }: Props) {
   }, [clientesQ.data])
   const [fecha, setFecha] = useState('')
   const [notas, setNotas] = useState('')
+  // Crédito (cuentas por cobrar)
+  const [aCredito, setACredito] = useState(false)
+  const [fechaVencimiento, setFechaVencimiento] = useState('')
+  const [abonoInicial, setAbonoInicial] = useState('')
   const [cart, setCart] = useState<UsaCartItem[]>([])
   const [seleccion, setSeleccion] = useState<UsaItemSeleccion | null>(null)
 
   const total = useMemo(() => cart.reduce((s, i) => s + usaCartItemSubtotal(i), 0), [cart])
+  const abonoNum = aCredito && abonoInicial.trim() !== '' ? Number(abonoInicial) : 0
+  const saldoCredito = Math.max(0, Math.round((total - abonoNum) * 100) / 100)
 
   const productoOptions: ComboboxOption[] = productos.map((p) => ({
     value: String(p.id),
@@ -111,18 +121,38 @@ export function UsaVentaTab({ metodosPago }: Props) {
     setFecha('')
     setNotas('')
     setCart([])
+    setACredito(false)
+    setFechaVencimiento('')
+    setAbonoInicial('')
   }
 
   async function handleRegistrar() {
     if (cart.length === 0) return toast.warning('Agregue al menos un producto o servicio')
-    if (!metodoPago) return toast.warning('Seleccione el método de pago')
+    if (aCredito) {
+      if (!Number.isFinite(abonoNum) || abonoNum < 0)
+        return toast.warning('El abono inicial no es válido')
+      if (abonoNum > total + 0.009)
+        return toast.warning('El abono inicial no puede superar el total')
+      if (abonoNum > 0 && !metodoPago)
+        return toast.warning('Seleccione el método de pago del abono inicial')
+    } else if (!metodoPago) {
+      return toast.warning('Seleccione el método de pago')
+    }
 
     const payload: UsaVentaPayload = {
       // Siempre enviamos la hora local del dispositivo (la mamá está en USA).
       fecha: fecha ? dateWithCurrentTime(fecha) : toLocalDateTimeISO(),
       cliente_nombre: cliente.trim() || null,
-      metodo_pago: metodoPago,
+      metodo_pago: aCredito ? undefined : metodoPago,
       notas: notas.trim() || null,
+      ...(aCredito
+        ? {
+            a_credito: true,
+            fecha_vencimiento: fechaVencimiento || null,
+            abono_inicial: abonoNum > 0 ? abonoNum : null,
+            metodo_abono_inicial: abonoNum > 0 ? metodoPago : null,
+          }
+        : {}),
       items: cart.map((i) =>
         i.tipo === 'producto'
           ? {
@@ -142,7 +172,11 @@ export function UsaVentaTab({ metodosPago }: Props) {
 
     try {
       const res = await registrar.mutateAsync(payload)
-      toast.success(`Venta USA #${res.id} registrada por ${formatUSD(res.total)}`)
+      toast.success(
+        res.a_credito
+          ? `Venta USA #${res.id} a crédito registrada. Saldo por cobrar: ${formatUSD(res.saldo_pendiente)}`
+          : `Venta USA #${res.id} registrada por ${formatUSD(res.total)}`,
+      )
       resetForm()
     } catch {
       /* toast lo maneja el hook */
@@ -172,11 +206,14 @@ export function UsaVentaTab({ metodosPago }: Props) {
             </div>
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5 text-navy">
-                <CreditCard className="h-4 w-4" /> Método de pago
+                <CreditCard className="h-4 w-4" />{' '}
+                {aCredito ? 'Método del abono inicial' : 'Método de pago'}
               </Label>
               <Select value={metodoPago} onValueChange={setMetodoPago}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccione" />
+                  <SelectValue
+                    placeholder={aCredito ? 'Solo si hay abono inicial' : 'Seleccione'}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {metodosPago.map((m) => (
@@ -295,7 +332,55 @@ export function UsaVentaTab({ metodosPago }: Props) {
             <span className="text-2xl font-bold text-navy">{formatUSD(total)}</span>
           </div>
 
-          <div className="space-y-1.5">
+          {/* Venta a crédito: queda en la pestaña "Por cobrar" hasta que se cobre */}
+          <div
+            className={cn(
+              'rounded-lg border p-3 transition-colors',
+              aCredito ? 'border-amber-300 bg-amber-50' : 'bg-muted/40',
+            )}
+          >
+            <label className="flex cursor-pointer items-center justify-between gap-3">
+              <span className="flex items-center gap-1.5 text-sm font-medium text-navy">
+                <HandCoins className="h-4 w-4" /> Venta a crédito
+              </span>
+              <Switch checked={aCredito} onCheckedChange={setACredito} />
+            </label>
+            {aCredito && (
+              <div className="mt-3 space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5 text-xs text-navy">
+                    <CalendarClock className="h-3.5 w-3.5" /> Fecha límite de pago (opcional)
+                  </Label>
+                  <Input
+                    type="date"
+                    className="h-9"
+                    value={fechaVencimiento}
+                    onChange={(e) => setFechaVencimiento(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-navy">Abono inicial (USD, opcional)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="h-9"
+                    placeholder="0.00"
+                    value={abonoInicial}
+                    onChange={(e) => setAbonoInicial(e.target.value)}
+                  />
+                </div>
+                <div className="flex items-baseline justify-between border-t border-amber-200 pt-2 text-sm">
+                  <span className="text-muted-foreground">Queda por cobrar</span>
+                  <span className="font-bold tabular-nums text-amber-700">
+                    {formatUSD(saldoCredito)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 space-y-1.5">
             <Label className="flex items-center gap-1.5 text-navy">
               <CalendarDays className="h-4 w-4" /> Fecha de venta (opcional)
             </Label>
@@ -319,7 +404,7 @@ export function UsaVentaTab({ metodosPago }: Props) {
             disabled={registrar.isPending}
           >
             {registrar.isPending && <Loader2 className="h-5 w-5 animate-spin" />}
-            Registrar venta
+            {aCredito ? 'Registrar venta a crédito' : 'Registrar venta'}
           </Button>
         </div>
       </div>

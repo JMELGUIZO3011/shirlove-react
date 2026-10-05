@@ -192,6 +192,22 @@ export function UsaHistorialTab() {
         />
       </div>
 
+      {resumen && resumen.ventas_credito > 0 && (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
+          <span className="font-semibold text-amber-800">
+            {resumen.ventas_credito} venta(s) a crédito en el período
+          </span>
+          <span className="text-amber-800">
+            Pendiente por cobrar:{' '}
+            <span className="font-bold tabular-nums">{formatUSD(resumen.por_cobrar)}</span>
+            <span className="text-xs"> (≈ {cop(resumen.por_cobrar)})</span>
+          </span>
+          <span className="text-amber-800">
+            Ya cobrado: <span className="font-bold tabular-nums">{formatUSD(resumen.cobrado_credito)}</span>
+          </span>
+        </div>
+      )}
+
       {resumen && resumen.por_metodo_pago.length > 0 && (
         <div className="rounded-xl border bg-white p-4 shadow-sm">
           <h3 className="mb-2 text-sm font-semibold text-navy">Por método de pago</h3>
@@ -278,7 +294,20 @@ export function UsaHistorialTab() {
                           {v.cliente_nombre ?? <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          <Badge variant="outline">{v.metodo_pago}</Badge>
+                          {v.a_credito ? (
+                            <Badge
+                              className={cn(
+                                'border-transparent text-white',
+                                v.saldo_pendiente > 0 ? 'bg-amber-500' : 'bg-green-600',
+                              )}
+                            >
+                              {v.saldo_pendiente > 0
+                                ? `Crédito · debe ${formatUSD(v.saldo_pendiente)}`
+                                : 'Crédito · cobrada'}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline">{v.metodo_pago}</Badge>
+                          )}
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-muted-foreground">
                           {v.items.length}

@@ -5,6 +5,7 @@ import { getApiErrorMessage } from '@/lib/apiError'
 import { setUsaToken } from '@/lib/usaAccess'
 import { toBackendRange, type DateRange } from '@/lib/dateRange'
 import type {
+  UsaAbonoPayload,
   UsaProductoPayload,
   UsaProductoUpdate,
   UsaServicioPayload,
@@ -172,6 +173,7 @@ export function useUsaRegistrarVenta() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [USA, 'productos'] })
       qc.invalidateQueries({ queryKey: [USA, 'ventas'] })
+      qc.invalidateQueries({ queryKey: [USA, 'cuentas-por-cobrar'] })
       qc.invalidateQueries({ queryKey: [USA, 'resumen'] })
       qc.invalidateQueries({ queryKey: [USA, 'movimientos'] })
     },
@@ -197,11 +199,58 @@ export function useUsaAnularVenta() {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: [USA, 'productos'] })
       qc.invalidateQueries({ queryKey: [USA, 'ventas'] })
+      qc.invalidateQueries({ queryKey: [USA, 'cuentas-por-cobrar'] })
       qc.invalidateQueries({ queryKey: [USA, 'resumen'] })
       qc.invalidateQueries({ queryKey: [USA, 'movimientos'] })
       toast.success(data.message)
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'No se pudo anular la venta')),
+  })
+}
+
+// ---- Cuentas por cobrar ----
+
+function invalidarVentas(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: [USA, 'ventas'] })
+  qc.invalidateQueries({ queryKey: [USA, 'cuentas-por-cobrar'] })
+  qc.invalidateQueries({ queryKey: [USA, 'resumen'] })
+}
+
+export function useUsaCuentasPorCobrar(incluirCobradas = false) {
+  return useQuery({
+    queryKey: [USA, 'cuentas-por-cobrar', incluirCobradas],
+    queryFn: () => usaService.getCuentasPorCobrar(incluirCobradas),
+    staleTime: 60_000,
+  })
+}
+
+export function useUsaRegistrarAbono() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ ventaId, payload }: { ventaId: number; payload: UsaAbonoPayload }) =>
+      usaService.registrarAbono(ventaId, payload),
+    onSuccess: (venta) => {
+      invalidarVentas(qc)
+      toast.success(
+        venta.saldo_pendiente > 0
+          ? 'Abono registrado'
+          : `Venta #${venta.id} cobrada en su totalidad`,
+      )
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'No se pudo registrar el cobro')),
+  })
+}
+
+export function useUsaEliminarAbono() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ ventaId, abonoId }: { ventaId: number; abonoId: number }) =>
+      usaService.eliminarAbono(ventaId, abonoId),
+    onSuccess: () => {
+      invalidarVentas(qc)
+      toast.success('Cobro eliminado; el saldo volvió a quedar pendiente')
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'No se pudo eliminar el cobro')),
   })
 }
 

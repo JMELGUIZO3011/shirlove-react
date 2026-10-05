@@ -1,6 +1,7 @@
 import { apiClient } from '@/lib/apiClient'
 import { ApiEndpoints } from '@/config/api'
 import type {
+  UsaAbonoPayload,
   UsaAcceso,
   UsaEstado,
   UsaMovimiento,
@@ -122,6 +123,24 @@ export const usaService = {
     const { data } = await apiClient.get<UsaVenta[]>(`${BASE}/ventas`, {
       params: { fecha_inicio: inicio, fecha_fin: fin, incluir_anuladas: incluirAnuladas },
     })
+    return data
+  },
+
+  // ---- Cuentas por cobrar (ventas a crédito) ----
+  async getCuentasPorCobrar(incluirCobradas = false): Promise<UsaVenta[]> {
+    const { data } = await apiClient.get<UsaVenta[]>(`${BASE}/cuentas-por-cobrar`, {
+      params: { incluir_cobradas: incluirCobradas },
+    })
+    return data
+  },
+
+  async registrarAbono(ventaId: number, payload: UsaAbonoPayload): Promise<UsaVenta> {
+    const { data } = await apiClient.post<UsaVenta>(`${BASE}/ventas/${ventaId}/abonos`, payload)
+    return data
+  },
+
+  async eliminarAbono(ventaId: number, abonoId: number): Promise<UsaVenta> {
+    const { data } = await apiClient.delete<UsaVenta>(`${BASE}/ventas/${ventaId}/abonos/${abonoId}`)
     return data
   },
 

@@ -91,11 +91,20 @@ export interface UsaVentaItem {
   subtotal: number
 }
 
+export interface UsaAbono {
+  id: number
+  monto: number
+  metodo_pago: string
+  fecha: string
+  notas: string | null
+  usuario_nombre: string | null
+}
+
 export interface UsaVenta {
   id: number
   fecha: string
   cliente_nombre: string | null
-  metodo_pago: string
+  metodo_pago: string // "Crédito" en ventas a crédito
   total: number
   notas: string | null
   usuario_nombre: string | null
@@ -103,6 +112,21 @@ export interface UsaVenta {
   fecha_anulacion: string | null
   motivo_anulacion: string | null
   items: UsaVentaItem[]
+  // Crédito / cuentas por cobrar
+  a_credito: boolean
+  saldo_pendiente: number
+  abonado: number
+  fecha_vencimiento: string | null // YYYY-MM-DD
+  fecha_pago_total: string | null
+  dias_vencida: number
+  abonos: UsaAbono[]
+}
+
+export interface UsaAbonoPayload {
+  monto: number
+  metodo_pago: string
+  fecha?: string
+  notas?: string | null
 }
 
 export interface UsaVentaItemPayload {
@@ -116,9 +140,13 @@ export interface UsaVentaItemPayload {
 export interface UsaVentaPayload {
   fecha?: string
   cliente_nombre?: string | null
-  metodo_pago: string
+  metodo_pago?: string // no aplica en ventas a crédito
   notas?: string | null
   items: UsaVentaItemPayload[]
+  a_credito?: boolean
+  fecha_vencimiento?: string | null
+  abono_inicial?: number | null
+  metodo_abono_inicial?: string | null
 }
 
 export interface UsaResumen {
@@ -130,6 +158,9 @@ export interface UsaResumen {
   ganancia_bruta: number
   unidades_vendidas: number
   servicios_prestados: number
+  ventas_credito: number
+  por_cobrar: number
+  cobrado_credito: number
   por_metodo_pago: { metodo_pago: string; ventas: number; monto: number }[]
   top_productos: { nombre: string; cantidad: number; monto: number }[]
   top_servicios: { nombre: string; cantidad: number; monto: number }[]
