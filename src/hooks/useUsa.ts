@@ -14,6 +14,7 @@ import type {
   UsaServicioUpdate,
   UsaStockPayload,
   UsaVentaPayload,
+  UsaVentaUpdatePayload,
 } from '@/types/usa'
 
 // Todas las queries del módulo cuelgan de ['usa'] para invalidarlas en bloque
@@ -191,6 +192,21 @@ export function useUsaVentas(range: DateRange, incluirAnuladas = false) {
     queryFn: () => usaService.getVentas(inicio, fin, incluirAnuladas),
     enabled: Boolean(range.inicio && range.fin),
     staleTime: 60_000,
+  })
+}
+
+export function useUsaActualizarVenta() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: UsaVentaUpdatePayload }) =>
+      usaService.actualizarVenta(id, payload),
+    onSuccess: () => {
+      invalidarVentas(qc)
+      qc.invalidateQueries({ queryKey: [USA, 'tips'] })
+      qc.invalidateQueries({ queryKey: [USA, 'movimientos'] })
+      toast.success('Venta actualizada')
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'No se pudo actualizar la venta')),
   })
 }
 

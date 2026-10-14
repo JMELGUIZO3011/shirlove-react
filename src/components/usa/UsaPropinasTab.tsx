@@ -1,33 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { AlertCircle, Coins, Loader2, Plus, Trash2, Users } from 'lucide-react'
-import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
-import { useUsaEliminarTip, useUsaRegistrarTip, useUsaResumen, useUsaTips } from '@/hooks/useUsa'
-import { dateWithCurrentTime, presetRange, toLocalDateTimeISO, type DateRange } from '@/lib/dateRange'
+import { useUsaEliminarTip, useUsaResumen, useUsaTips } from '@/hooks/useUsa'
+import { presetRange, type DateRange } from '@/lib/dateRange'
 import { formatFechaHora, formatUSD } from '@/lib/format'
 import type { UsaTip } from '@/types/usa'
 import { DateRangeControl } from '@/components/reportes/DateRangeControl'
+import { UsaPropinaDialog } from '@/components/usa/UsaPropinaDialog'
 import { StatCard } from '@/components/reportes/StatCard'
-import { AutocompleteInput } from '@/components/AutocompleteInput'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -226,7 +208,7 @@ export function UsaPropinasTab({ metodosPago }: Props) {
         </div>
       )}
 
-      <PropinaFormDialog
+      <UsaPropinaDialog
         open={formOpen}
         onOpenChange={setFormOpen}
         metodosPago={metodosPago}
@@ -256,140 +238,5 @@ export function UsaPropinasTab({ metodosPago }: Props) {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  )
-}
-
-function PropinaFormDialog({
-  open,
-  onOpenChange,
-  metodosPago,
-  personas,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  metodosPago: string[]
-  personas: string[]
-}) {
-  const registrar = useUsaRegistrarTip()
-  const [monto, setMonto] = useState('')
-  const [metodo, setMetodo] = useState('')
-  const [para, setPara] = useState('')
-  const [ventaId, setVentaId] = useState('')
-  const [fecha, setFecha] = useState('')
-  const [notas, setNotas] = useState('')
-
-  useEffect(() => {
-    if (open) {
-      setMonto('')
-      setMetodo('')
-      setPara('')
-      setVentaId('')
-      setFecha('')
-      setNotas('')
-    }
-  }, [open])
-
-  async function handleSave() {
-    const montoNum = Number(monto)
-    if (!Number.isFinite(montoNum) || montoNum <= 0) return toast.warning('Ingrese un monto válido')
-    if (!metodo) return toast.warning('Seleccione el método de pago')
-    const ventaNum = ventaId.trim() ? Number(ventaId) : null
-    if (ventaNum !== null && (!Number.isInteger(ventaNum) || ventaNum <= 0))
-      return toast.warning('El número de venta no es válido')
-    try {
-      await registrar.mutateAsync({
-        venta_id: ventaNum,
-        monto: Math.round(montoNum * 100) / 100,
-        metodo_pago: metodo,
-        para: para.trim() || null,
-        fecha: fecha ? dateWithCurrentTime(fecha) : toLocalDateTimeISO(),
-        notas: notas.trim() || null,
-      })
-      onOpenChange(false)
-    } catch {
-      /* toast lo maneja el hook */
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-navy">Registrar propina</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="usa-tip-monto">Monto (USD)</Label>
-              <Input
-                id="usa-tip-monto"
-                type="number"
-                min={0}
-                step="0.01"
-                value={monto}
-                onChange={(e) => setMonto(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Método de pago</Label>
-              <Select value={metodo} onValueChange={setMetodo}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccione" />
-                </SelectTrigger>
-                <SelectContent>
-                  {metodosPago.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="usa-tip-para">Para quién (opcional)</Label>
-            <AutocompleteInput
-              id="usa-tip-para"
-              value={para}
-              onChange={setPara}
-              options={personas.map((p) => ({ value: p }))}
-              heading="Personas con propinas"
-              placeholder="Nombre de quien recibe la propina"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="usa-tip-venta">N° de venta (opcional)</Label>
-              <Input
-                id="usa-tip-venta"
-                type="number"
-                min={1}
-                step={1}
-                value={ventaId}
-                onChange={(e) => setVentaId(e.target.value)}
-                placeholder="Ej: 12"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="usa-tip-fecha">Fecha (opcional)</Label>
-              <Input id="usa-tip-fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="usa-tip-notas">Notas (opcional)</Label>
-            <Textarea id="usa-tip-notas" rows={2} value={notas} onChange={(e) => setNotas(e.target.value)} />
-          </div>
-        </div>
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={registrar.isPending}>
-            Cancelar
-          </Button>
-          <Button variant="secondary" onClick={handleSave} disabled={registrar.isPending}>
-            {registrar.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            Registrar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 }

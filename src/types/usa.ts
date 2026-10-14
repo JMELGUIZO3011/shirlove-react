@@ -172,6 +172,13 @@ export interface UsaVenta {
   tips_total: number
 }
 
+export interface UsaVentaUpdatePayload {
+  cliente_nombre?: string | null
+  fecha?: string
+  notas?: string | null
+  fecha_vencimiento?: string | null
+}
+
 export interface UsaAbonoPayload {
   monto: number
   metodo_pago: string

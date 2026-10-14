@@ -138,6 +138,10 @@ El backend se mantuvo casi intacto; solo se agregaron **funciones nuevas pedidas
      (`POST /api/usa/tips`, con `venta_id` opcional). `GET /api/usa/tips?fecha_inicio&fecha_fin`,
      `DELETE /api/usa/tips/{id}` (admin). No suman a los ingresos; el resumen trae
      `tips_total`, `tips_por_metodo` y `tips_por_persona`. Se excluyen las de ventas anuladas.
+   - **Editar venta**: `PUT /api/usa/ventas/{id}` solo cambia clienta, fecha, notas y fecha
+     límite de pago (se modifican únicamente los campos enviados). Al cambiar la fecha se mueven
+     con la venta los pagos iniciales, las propinas con esa fecha y los movimientos de inventario
+     de la venta. Ítems, montos y pagos no se editan (anular y registrar de nuevo).
    - **Insumos** (`usa_consumos_internos`): `POST /api/usa/consumos` descuenta el inventario USA
      (movimiento tipo `consumo`) y guarda el costo como snapshot; `DELETE` (admin) devuelve las
      unidades. El resumen trae `insumos_costo`, `insumos_unidades` y `ganancia_neta`
@@ -191,7 +195,8 @@ Notas de API:
 - Pestañas: Nueva venta (POS con productos/servicios USA; **pagos mixtos**: se agregan
   varios pagos por método y lo que falte queda a crédito con fecha límite opcional;
   **propina** opcional con método y "para quién"), Historial (resumen + anular; muestra cómo
-  se pagó cada venta, saldo que debe y propina), **Por cobrar** (cuentas pendientes ordenadas
+  se pagó cada venta, saldo que debe y propina; por fila: agregar propina, registrar pago si
+  debe, editar clienta/fecha/notas), **Por cobrar** (cuentas pendientes ordenadas
   por vencidas primero, KPIs, botón "Cobrar" para abonos parciales o "Marcar como cobrada",
   pagos registrados y eliminación de cobros para admin), **Propinas** (KPIs, por método, por
   persona, detalle, registrar sueltas y eliminar para admin), **Insumos** (productos que se

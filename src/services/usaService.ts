@@ -19,6 +19,7 @@ import type {
   UsaStockPayload,
   UsaVenta,
   UsaVentaPayload,
+  UsaVentaUpdatePayload,
 } from '@/types/usa'
 
 const BASE = ApiEndpoints.usa
@@ -180,6 +181,13 @@ export const usaService = {
 
   async eliminarConsumo(id: number): Promise<{ message: string }> {
     const { data } = await apiClient.delete<{ message: string }>(`${BASE}/consumos/${id}`)
+    return data
+  },
+
+  async actualizarVenta(id: number, payload: UsaVentaUpdatePayload): Promise<UsaVenta> {
+    // Solo se envían los campos definidos (el backend modifica únicamente los recibidos).
+    const body = Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined))
+    const { data } = await apiClient.put<UsaVenta>(`${BASE}/ventas/${id}`, body)
     return data
   },
 

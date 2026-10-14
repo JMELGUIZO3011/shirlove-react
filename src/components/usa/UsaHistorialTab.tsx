@@ -7,9 +7,11 @@ import {
   ChevronRight,
   Coins,
   DollarSign,
+  HandCoins,
   Loader2,
   Package,
   PackageMinus,
+  Pencil,
   Receipt,
   RefreshCw,
   Sparkles,
@@ -25,6 +27,9 @@ import { cn } from '@/lib/utils'
 import type { UsaVenta } from '@/types/usa'
 import { DateRangeControl } from '@/components/reportes/DateRangeControl'
 import { StatCard } from '@/components/reportes/StatCard'
+import { UsaCobroDialog } from '@/components/usa/UsaCobroDialog'
+import { UsaPropinaDialog } from '@/components/usa/UsaPropinaDialog'
+import { UsaVentaEditDialog } from '@/components/usa/UsaVentaEditDialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -49,13 +54,20 @@ import {
 } from '@/components/ui/alert-dialog'
 
 // Historial y resumen de ventas USA del período (solo datos del módulo USA).
-export function UsaHistorialTab() {
+interface Props {
+  metodosPago: string[]
+}
+
+export function UsaHistorialTab({ metodosPago }: Props) {
   const { user } = useAuth()
   const [range, setRange] = useState<DateRange>(() => presetRange('mes'))
   const [verAnuladas, setVerAnuladas] = useState(false)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [toAnular, setToAnular] = useState<UsaVenta | null>(null)
   const [motivo, setMotivo] = useState('')
+  const [aEditar, setAEditar] = useState<UsaVenta | null>(null)
+  const [aCobrar, setACobrar] = useState<UsaVenta | null>(null)
+  const [tipPara, setTipPara] = useState<UsaVenta | null>(null)
 
   const ventasQ = useUsaVentas(range, verAnuladas)
   const resumenQ = useUsaResumen(range)
@@ -285,7 +297,7 @@ export function UsaHistorialTab() {
                 <TableHead className="hidden md:table-cell">Pago</TableHead>
                 <TableHead className="hidden md:table-cell">Items</TableHead>
                 <TableHead className="text-right">Total</TableHead>
-                <TableHead className="w-12" />
+                <TableHead className="w-36" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -348,16 +360,53 @@ export function UsaHistorialTab() {
                           </div>
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          {user?.esAdmin && !v.anulada && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => setToAnular(v)}
-                              aria-label="Anular venta"
-                            >
-                              <Ban className="h-4 w-4 text-destructive" />
-                            </Button>
+                          {!v.anulada && (
+                            <div className="flex justify-end gap-0.5">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => setTipPara(v)}
+                                aria-label="Agregar propina"
+                                title="Agregar propina"
+                              >
+                                <Coins className="h-4 w-4 text-green-700" />
+                              </Button>
+                              {v.saldo_pendiente > 0 && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => setACobrar(v)}
+                                  aria-label="Cobrar"
+                                  title="Registrar un pago"
+                                >
+                                  <HandCoins className="h-4 w-4 text-amber-700" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => setAEditar(v)}
+                                aria-label="Editar venta"
+                                title="Editar clienta, fecha o notas"
+                              >
+                                <Pencil className="h-4 w-4 text-navy" />
+                              </Button>
+                              {user?.esAdmin && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => setToAnular(v)}
+                                  aria-label="Anular venta"
+                                  title="Anular venta"
+                                >
+                                  <Ban className="h-4 w-4 text-destructive" />
+                                </Button>
+                              )}
+                            </div>
                           )}
                         </TableCell>
                       </TableRow>
@@ -436,6 +485,15 @@ export function UsaHistorialTab() {
           </Table>
         </div>
       )}
+
+      <UsaVentaEditDialog venta={aEditar} onClose={() => setAEditar(null)} />
+      <UsaCobroDialog venta={aCobrar} metodosPago={metodosPago} onClose={() => setACobrar(null)} />
+      <UsaPropinaDialog
+        open={tipPara !== null}
+        onOpenChange={(o) => !o && setTipPara(null)}
+        metodosPago={metodosPago}
+        venta={tipPara}
+      />
 
       <AlertDialog open={toAnular !== null} onOpenChange={(o) => !o && setToAnular(null)}>
         <AlertDialogContent>

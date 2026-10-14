@@ -103,7 +103,7 @@ function UsaPageContent() {
         </div>
 
         {tab === 'venta' && <UsaVentaTab metodosPago={metodosPago} />}
-        {tab === 'historial' && <UsaHistorialTab />}
+        {tab === 'historial' && <UsaHistorialTab metodosPago={metodosPago} />}
         {tab === 'por-cobrar' && <UsaCuentasPorCobrarTab metodosPago={metodosPago} />}
         {tab === 'propinas' && <UsaPropinasTab metodosPago={metodosPago} />}
         {tab === 'insumos' && <UsaInsumosTab />}
