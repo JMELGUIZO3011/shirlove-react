@@ -77,8 +77,9 @@ heroku run python <script>.py -a shirloveapp
 Scripts existentes (en `C:\shirloveApp`): `crear_tabla_gastos.py`,
 `crear_tabla_consumos_internos.py`, `crear_tabla_metodos_pago_mixtos.py`,
 `crear_tabla_pagos_nomina.py`, **`agregar_anulacion_ventas.py`** (columnas de anulación
-de ventas — ver abajo) y **`agregar_credito_usa_ventas.py`** (columnas de crédito /
-cuentas por cobrar en `usa_ventas`). Son idempotentes (`IF NOT EXISTS`).
+de ventas — ver abajo), **`agregar_credito_usa_ventas.py`** (columnas de crédito /
+cuentas por cobrar en `usa_ventas`) y **`agregar_pagos_tips_insumos_usa.py`** (pagos
+mixtos, propinas e insumos del módulo USA). Son idempotentes (`IF NOT EXISTS`).
 
 > Orden: primero `git push heroku` (para que el script esté en el dyno) y luego
 > `heroku run python <script>.py`.
@@ -125,6 +126,37 @@ El backend se mantuvo casi intacto; solo se agregaron **funciones nuevas pedidas
      `usa_ventas` → **migración `agregar_credito_usa_ventas.py`** (hay que correrla con
      `heroku run` después del push). El resumen reparte lo cobrado por el método real de
      cada abono y muestra el saldo como "Crédito (pendiente)".
+   - **Pagos mixtos** (migración `agregar_pagos_tips_insumos_usa.py`): `POST /api/usa/ventas`
+     recibe `pagos: [{metodo_pago, monto}]`; cada pago se guarda en `usa_ventas_abonos` con
+     `es_pago_inicial = true`, y si la suma es menor al total el resto queda a crédito
+     (`a_credito`, `saldo_pendiente`, `fecha_vencimiento` opcional). Sin pagos = toda la
+     venta a crédito. `usa_ventas.metodo_pago` guarda un resumen ("Efectivo + Zelle + Crédito")
+     que se recalcula al cobrar o eliminar cobros. La migración crea el pago de las ventas de
+     contado antiguas para que el modelo sea uniforme. El formato anterior (`metodo_pago`,
+     `a_credito` + `abono_inicial`) sigue aceptándose.
+   - **Propinas** (`usa_tips`): se registran con la venta (`tips: [...]` en el POST) o sueltas
+     (`POST /api/usa/tips`, con `venta_id` opcional). `GET /api/usa/tips?fecha_inicio&fecha_fin`,
+     `DELETE /api/usa/tips/{id}` (admin). No suman a los ingresos; el resumen trae
+     `tips_total`, `tips_por_metodo` y `tips_por_persona`. Se excluyen las de ventas anuladas.
+   - **Insumos** (`usa_consumos_internos`): `POST /api/usa/consumos` descuenta el inventario USA
+     (movimiento tipo `consumo`) y guarda el costo como snapshot; `DELETE` (admin) devuelve las
+     unidades. El resumen trae `insumos_costo`, `insumos_unidades` y `ganancia_neta`
+     (= ganancia bruta − insumos).
+
+---
+
+## Sesión y expiración del token
+
+- El token de login dura **12 horas** (`ACCESS_TOKEN_EXPIRE_MINUTES` en
+  `app/routers/auth.py`; antes eran 30 min).
+- Si el backend responde **401** a cualquier petición (token vencido o inválido), `apiClient`
+  borra el token del panel y el del módulo USA y dispara el evento `session-expired`;
+  `AuthContext` cierra la sesión y muestra el aviso "Tu sesión expiró", y `ProtectedRoute`
+  lleva al login. Se excluyen `/api/auth/login` y `/api/usa/acceso`, donde un 401 significa
+  "contraseña incorrecta".
+- Ojo: solo algunos routers exigen token en los GET (gastos, nómina, consumos internos,
+  clientes, servicios, estilistas). Inventario, productos, combos y el reporte de ventas no
+  lo verifican. Por eso, con el token vencido, "solo fallaban" esos módulos.
 
 ---
 
@@ -156,13 +188,16 @@ Notas de API:
   el evento `usa-access-revoked` para que `UsaGate` vuelva a pedir la contraseña.
 - Todo en **USD** (`formatUSD`). Las cachés de TanStack Query cuelgan de `['usa', ...]` y
   no se cruzan con las de Colombia.
-- Pestañas: Nueva venta (POS con productos/servicios USA; interruptor "Venta a crédito"
-  con fecha límite y abono inicial opcionales), Historial (resumen + anular; las ventas a
-  crédito muestran el saldo que deben), **Por cobrar** (cuentas pendientes ordenadas por
-  vencidas primero, KPIs, botón "Cobrar" para abonos parciales o "Marcar como cobrada",
-  historial de cobros y eliminación de cobros para admin), Inventario (existencias,
-  entradas, ajustes, movimientos) y Catálogo (productos y servicios USA con
-  activar/desactivar).
+- Pestañas: Nueva venta (POS con productos/servicios USA; **pagos mixtos**: se agregan
+  varios pagos por método y lo que falte queda a crédito con fecha límite opcional;
+  **propina** opcional con método y "para quién"), Historial (resumen + anular; muestra cómo
+  se pagó cada venta, saldo que debe y propina), **Por cobrar** (cuentas pendientes ordenadas
+  por vencidas primero, KPIs, botón "Cobrar" para abonos parciales o "Marcar como cobrada",
+  pagos registrados y eliminación de cobros para admin), **Propinas** (KPIs, por método, por
+  persona, detalle, registrar sueltas y eliminar para admin), **Insumos** (productos que se
+  sacan del inventario para trabajar: KPIs, historial, registrar y eliminar para admin),
+  Inventario (existencias, entradas, ajustes, movimientos) y Catálogo (productos y servicios
+  USA con activar/desactivar).
 - Al crear un producto o servicio USA, el campo nombre **sugiere los del catálogo de
   Colombia** (`/api/productos` y `/api/servicios-salon`) pero admite escribir uno nuevo.
   Solo se copia el nombre (y la categoría en servicios); si el producto de Colombia ya

@@ -3,15 +3,18 @@ import { toast } from 'sonner'
 import {
   CalendarClock,
   CalendarDays,
+  Coins,
   CreditCard,
   HandCoins,
   Loader2,
   Package,
+  Plus,
   ShoppingCart,
   Sparkles,
   StickyNote,
   Trash2,
   User,
+  X,
 } from 'lucide-react'
 import { useUsaProductos, useUsaRegistrarVenta, useUsaServicios } from '@/hooks/useUsa'
 import { useClientes } from '@/hooks/useClientes'
@@ -29,7 +32,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -42,8 +44,17 @@ interface Props {
   metodosPago: string[]
 }
 
+interface PagoLocal {
+  uid: string
+  metodo: string
+  monto: number
+}
+
+const redondear = (n: number) => Math.round(n * 100) / 100
+
 // Punto de venta del Módulo USA: productos y servicios del catálogo USA,
 // precios en USD, descuenta el inventario USA. No toca nada de Colombia.
+// Pagos mixtos: varios métodos; lo que no se pague queda a crédito (Por cobrar).
 export function UsaVentaTab({ metodosPago }: Props) {
   const productosQ = useUsaProductos()
   const serviciosQ = useUsaServicios()
@@ -53,7 +64,6 @@ export function UsaVentaTab({ metodosPago }: Props) {
   const servicios = serviciosQ.data ?? []
 
   const [cliente, setCliente] = useState('')
-  const [metodoPago, setMetodoPago] = useState('')
 
   // Sugerencias de clientas desde la base de clientes de Colombia (búsqueda en
   // servidor con debounce). Solo se copia el nombre: la venta USA guarda texto
@@ -72,18 +82,27 @@ export function UsaVentaTab({ metodosPago }: Props) {
     }
     return out
   }, [clientesQ.data])
+
   const [fecha, setFecha] = useState('')
   const [notas, setNotas] = useState('')
-  // Crédito (cuentas por cobrar)
-  const [aCredito, setACredito] = useState(false)
-  const [fechaVencimiento, setFechaVencimiento] = useState('')
-  const [abonoInicial, setAbonoInicial] = useState('')
   const [cart, setCart] = useState<UsaCartItem[]>([])
   const [seleccion, setSeleccion] = useState<UsaItemSeleccion | null>(null)
 
-  const total = useMemo(() => cart.reduce((s, i) => s + usaCartItemSubtotal(i), 0), [cart])
-  const abonoNum = aCredito && abonoInicial.trim() !== '' ? Number(abonoInicial) : 0
-  const saldoCredito = Math.max(0, Math.round((total - abonoNum) * 100) / 100)
+  // Pagos mixtos
+  const [pagos, setPagos] = useState<PagoLocal[]>([])
+  const [pagoMetodo, setPagoMetodo] = useState('')
+  const [pagoMonto, setPagoMonto] = useState('')
+  const [fechaVencimiento, setFechaVencimiento] = useState('')
+
+  // Propina
+  const [tipMonto, setTipMonto] = useState('')
+  const [tipMetodo, setTipMetodo] = useState('')
+  const [tipPara, setTipPara] = useState('')
+
+  const total = useMemo(() => redondear(cart.reduce((s, i) => s + usaCartItemSubtotal(i), 0)), [cart])
+  const pagado = useMemo(() => redondear(pagos.reduce((s, p) => s + p.monto, 0)), [pagos])
+  const restante = Math.max(0, redondear(total - pagado))
+  const quedaCredito = cart.length > 0 && restante > 0.009
 
   const productoOptions: ComboboxOption[] = productos.map((p) => ({
     value: String(p.id),
@@ -115,44 +134,50 @@ export function UsaVentaTab({ metodosPago }: Props) {
     setCart((prev) => prev.filter((i) => i.uid !== uid))
   }
 
+  function addPago() {
+    if (!pagoMetodo) return toast.warning('Seleccione el método de pago')
+    const monto = Number(pagoMonto)
+    if (!Number.isFinite(monto) || monto <= 0) return toast.warning('Ingrese un monto válido')
+    if (monto > restante + 0.009)
+      return toast.warning(`El monto no puede superar lo que falta por pagar (${formatUSD(restante)})`)
+    setPagos((prev) => [...prev, { uid: `${Date.now()}-${prev.length}`, metodo: pagoMetodo, monto: redondear(monto) }])
+    setPagoMetodo('')
+    setPagoMonto('')
+  }
+
+  function removePago(uid: string) {
+    setPagos((prev) => prev.filter((p) => p.uid !== uid))
+  }
+
   function resetForm() {
     setCliente('')
-    setMetodoPago('')
     setFecha('')
     setNotas('')
     setCart([])
-    setACredito(false)
+    setPagos([])
+    setPagoMetodo('')
+    setPagoMonto('')
     setFechaVencimiento('')
-    setAbonoInicial('')
+    setTipMonto('')
+    setTipMetodo('')
+    setTipPara('')
   }
 
   async function handleRegistrar() {
     if (cart.length === 0) return toast.warning('Agregue al menos un producto o servicio')
-    if (aCredito) {
-      if (!Number.isFinite(abonoNum) || abonoNum < 0)
-        return toast.warning('El abono inicial no es válido')
-      if (abonoNum > total + 0.009)
-        return toast.warning('El abono inicial no puede superar el total')
-      if (abonoNum > 0 && !metodoPago)
-        return toast.warning('Seleccione el método de pago del abono inicial')
-    } else if (!metodoPago) {
-      return toast.warning('Seleccione el método de pago')
-    }
+    if (pagado > total + 0.009) return toast.warning('Los pagos superan el total de la venta')
+    const tipNum = tipMonto.trim() === '' ? 0 : Number(tipMonto)
+    if (!Number.isFinite(tipNum) || tipNum < 0) return toast.warning('La propina no es válida')
+    if (tipNum > 0 && !tipMetodo) return toast.warning('Seleccione el método de pago de la propina')
 
     const payload: UsaVentaPayload = {
       // Siempre enviamos la hora local del dispositivo (la mamá está en USA).
       fecha: fecha ? dateWithCurrentTime(fecha) : toLocalDateTimeISO(),
       cliente_nombre: cliente.trim() || null,
-      metodo_pago: aCredito ? undefined : metodoPago,
       notas: notas.trim() || null,
-      ...(aCredito
-        ? {
-            a_credito: true,
-            fecha_vencimiento: fechaVencimiento || null,
-            abono_inicial: abonoNum > 0 ? abonoNum : null,
-            metodo_abono_inicial: abonoNum > 0 ? metodoPago : null,
-          }
-        : {}),
+      pagos: pagos.map((p) => ({ metodo_pago: p.metodo, monto: p.monto })),
+      fecha_vencimiento: quedaCredito && fechaVencimiento ? fechaVencimiento : null,
+      tips: tipNum > 0 ? [{ monto: redondear(tipNum), metodo_pago: tipMetodo, para: tipPara.trim() || null }] : [],
       items: cart.map((i) =>
         i.tipo === 'producto'
           ? {
@@ -174,7 +199,7 @@ export function UsaVentaTab({ metodosPago }: Props) {
       const res = await registrar.mutateAsync(payload)
       toast.success(
         res.a_credito
-          ? `Venta USA #${res.id} a crédito registrada. Saldo por cobrar: ${formatUSD(res.saldo_pendiente)}`
+          ? `Venta USA #${res.id} registrada. Queda por cobrar ${formatUSD(res.saldo_pendiente)}`
           : `Venta USA #${res.id} registrada por ${formatUSD(res.total)}`,
       )
       resetForm()
@@ -188,42 +213,20 @@ export function UsaVentaTab({ metodosPago }: Props) {
       {/* Columna izquierda: constructor */}
       <div className="space-y-4 lg:col-span-2">
         <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5 text-navy">
-                <User className="h-4 w-4" /> Cliente (opcional)
-              </Label>
-              <AutocompleteInput
-                value={cliente}
-                onChange={setCliente}
-                options={clienteOptions}
-                filter={false}
-                loading={clientesQ.isFetching && clienteOptions.length === 0}
-                heading="Clientas registradas"
-                createLabel={(t) => `Registrar a nombre de «${t}»`}
-                placeholder="Nombre de la clienta"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5 text-navy">
-                <CreditCard className="h-4 w-4" />{' '}
-                {aCredito ? 'Método del abono inicial' : 'Método de pago'}
-              </Label>
-              <Select value={metodoPago} onValueChange={setMetodoPago}>
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={aCredito ? 'Solo si hay abono inicial' : 'Seleccione'}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {metodosPago.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5 text-navy">
+              <User className="h-4 w-4" /> Cliente (opcional)
+            </Label>
+            <AutocompleteInput
+              value={cliente}
+              onChange={setCliente}
+              options={clienteOptions}
+              filter={false}
+              loading={clientesQ.isFetching && clienteOptions.length === 0}
+              heading="Clientas registradas"
+              createLabel={(t) => `Registrar a nombre de «${t}»`}
+              placeholder="Nombre de la clienta"
+            />
           </div>
 
           <div className="mt-4 space-y-3 border-t pt-4">
@@ -324,7 +327,7 @@ export function UsaVentaTab({ metodosPago }: Props) {
         </div>
       </div>
 
-      {/* Columna derecha: resumen */}
+      {/* Columna derecha: pago y resumen */}
       <div className="space-y-4">
         <div className="rounded-xl border bg-white p-4 shadow-sm lg:sticky lg:top-4">
           <div className="mb-3 flex items-baseline justify-between">
@@ -332,52 +335,161 @@ export function UsaVentaTab({ metodosPago }: Props) {
             <span className="text-2xl font-bold text-navy">{formatUSD(total)}</span>
           </div>
 
-          {/* Venta a crédito: queda en la pestaña "Por cobrar" hasta que se cobre */}
-          <div
-            className={cn(
-              'rounded-lg border p-3 transition-colors',
-              aCredito ? 'border-amber-300 bg-amber-50' : 'bg-muted/40',
+          {/* Pagos (pueden ser varios métodos) */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5 text-navy">
+              <CreditCard className="h-4 w-4" /> Pagos
+            </Label>
+            {pagos.length > 0 && (
+              <ul className="space-y-1.5">
+                {pagos.map((p) => (
+                  <li
+                    key={p.uid}
+                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+                  >
+                    <span>{p.metodo}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium tabular-nums">{formatUSD(p.monto)}</span>
+                      <button
+                        onClick={() => removePago(p.uid)}
+                        className="text-muted-foreground hover:text-destructive"
+                        aria-label="Quitar pago"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
-          >
-            <label className="flex cursor-pointer items-center justify-between gap-3">
-              <span className="flex items-center gap-1.5 text-sm font-medium text-navy">
-                <HandCoins className="h-4 w-4" /> Venta a crédito
-              </span>
-              <Switch checked={aCredito} onCheckedChange={setACredito} />
-            </label>
-            {aCredito && (
-              <div className="mt-3 space-y-3">
-                <div className="space-y-1.5">
-                  <Label className="flex items-center gap-1.5 text-xs text-navy">
-                    <CalendarClock className="h-3.5 w-3.5" /> Fecha límite de pago (opcional)
-                  </Label>
-                  <Input
-                    type="date"
-                    className="h-9"
-                    value={fechaVencimiento}
-                    onChange={(e) => setFechaVencimiento(e.target.value)}
-                  />
+            {restante > 0.009 && (
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <Select value={pagoMetodo} onValueChange={setPagoMetodo}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Método" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {metodosPago.map((m) => (
+                        <SelectItem key={m} value={m}>
+                          {m}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-navy">Abono inicial (USD, opcional)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    className="h-9"
-                    placeholder="0.00"
-                    value={abonoInicial}
-                    onChange={(e) => setAbonoInicial(e.target.value)}
-                  />
-                </div>
-                <div className="flex items-baseline justify-between border-t border-amber-200 pt-2 text-sm">
-                  <span className="text-muted-foreground">Queda por cobrar</span>
-                  <span className="font-bold tabular-nums text-amber-700">
-                    {formatUSD(saldoCredito)}
-                  </span>
-                </div>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="h-9 w-28"
+                  placeholder="Monto"
+                  value={pagoMonto}
+                  onChange={(e) => setPagoMonto(e.target.value)}
+                  onFocus={() => {
+                    if (!pagoMonto) setPagoMonto(String(restante))
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      addPago()
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  className="h-9 w-9 shrink-0"
+                  onClick={addPago}
+                  aria-label="Agregar pago"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
               </div>
             )}
+            <div className="rounded-lg bg-muted p-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Pagado</span>
+                <span className="tabular-nums">{formatUSD(pagado)}</span>
+              </div>
+              <div className="mt-1 flex justify-between">
+                <span className="text-muted-foreground">Falta por pagar</span>
+                <span
+                  className={cn(
+                    'font-semibold tabular-nums',
+                    restante > 0.009 ? 'text-amber-700' : 'text-green-600',
+                  )}
+                >
+                  {formatUSD(restante)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Lo que no se pague queda a crédito */}
+          {quedaCredito && (
+            <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <p className="flex items-center gap-1.5 text-sm font-medium text-amber-800">
+                <HandCoins className="h-4 w-4" />
+                {pagado > 0 ? 'El resto queda a crédito' : 'Toda la venta queda a crédito'}:{' '}
+                <span className="font-bold tabular-nums">{formatUSD(restante)}</span>
+              </p>
+              <p className="mt-1 text-xs text-amber-800/80">
+                Aparecerá en la pestaña «Por cobrar» hasta que se cobre.
+              </p>
+              <div className="mt-2 space-y-1.5">
+                <Label className="flex items-center gap-1.5 text-xs text-navy">
+                  <CalendarClock className="h-3.5 w-3.5" /> Fecha límite de pago (opcional)
+                </Label>
+                <Input
+                  type="date"
+                  className="h-9"
+                  value={fechaVencimiento}
+                  onChange={(e) => setFechaVencimiento(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Propina (aparte del total de la venta) */}
+          <div className="mt-4 space-y-2 rounded-lg border p-3">
+            <Label className="flex items-center gap-1.5 text-navy">
+              <Coins className="h-4 w-4" /> Propina (opcional)
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                className="h-9 w-28"
+                placeholder="0.00"
+                value={tipMonto}
+                onChange={(e) => setTipMonto(e.target.value)}
+              />
+              <div className="flex-1">
+                <Select value={tipMetodo} onValueChange={setTipMetodo}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Método" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {metodosPago.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Input
+              className="h-9"
+              placeholder="Para quién (opcional)"
+              value={tipPara}
+              onChange={(e) => setTipPara(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              No suma al total de la venta; se lleva aparte en la pestaña «Propinas».
+            </p>
           </div>
 
           <div className="mt-4 space-y-1.5">
@@ -404,7 +516,7 @@ export function UsaVentaTab({ metodosPago }: Props) {
             disabled={registrar.isPending}
           >
             {registrar.isPending && <Loader2 className="h-5 w-5 animate-spin" />}
-            {aCredito ? 'Registrar venta a crédito' : 'Registrar venta'}
+            {quedaCredito ? 'Registrar venta (resto a crédito)' : 'Registrar venta'}
           </Button>
         </div>
       </div>

@@ -7,8 +7,9 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { toast } from 'sonner'
 import { authService } from '@/services/authService'
-import { TOKEN_STORAGE_KEY } from '@/lib/apiClient'
+import { SESSION_EXPIRED_EVENT, TOKEN_STORAGE_KEY } from '@/lib/apiClient'
 import type { User } from '@/types/auth'
 
 interface AuthContextValue {
@@ -62,6 +63,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false
     }
+  }, [])
+
+  // El backend respondió 401 a una petición (token vencido tras 12 h, o inválido):
+  // apiClient ya borró el token; aquí cerramos la sesión en la UI y avisamos.
+  useEffect(() => {
+    const onExpired = () => {
+      setUser(null)
+      setToken(null)
+      toast.warning('Tu sesión expiró. Vuelve a iniciar sesión para continuar.')
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired)
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired)
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {

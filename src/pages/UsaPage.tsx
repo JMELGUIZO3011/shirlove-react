@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import {
   Boxes,
+  Coins,
   HandCoins,
   History,
   KeyRound,
   LogOut,
+  PackageMinus,
   ShoppingCart,
   Tags,
   type LucideIcon,
@@ -19,16 +21,20 @@ import { UsaPasswordDialog } from '@/components/usa/UsaPasswordDialog'
 import { UsaVentaTab } from '@/components/usa/UsaVentaTab'
 import { UsaHistorialTab } from '@/components/usa/UsaHistorialTab'
 import { UsaCuentasPorCobrarTab } from '@/components/usa/UsaCuentasPorCobrarTab'
+import { UsaPropinasTab } from '@/components/usa/UsaPropinasTab'
+import { UsaInsumosTab } from '@/components/usa/UsaInsumosTab'
 import { UsaInventarioTab } from '@/components/usa/UsaInventarioTab'
 import { UsaCatalogoTab } from '@/components/usa/UsaCatalogoTab'
 import { Button } from '@/components/ui/button'
 
-type Tab = 'venta' | 'historial' | 'por-cobrar' | 'inventario' | 'catalogo'
+type Tab = 'venta' | 'historial' | 'por-cobrar' | 'propinas' | 'insumos' | 'inventario' | 'catalogo'
 
 const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
   { key: 'venta', label: 'Nueva venta', icon: ShoppingCart },
   { key: 'historial', label: 'Historial', icon: History },
   { key: 'por-cobrar', label: 'Por cobrar', icon: HandCoins },
+  { key: 'propinas', label: 'Propinas', icon: Coins },
+  { key: 'insumos', label: 'Insumos', icon: PackageMinus },
   { key: 'inventario', label: 'Inventario', icon: Boxes },
   { key: 'catalogo', label: 'Catálogo', icon: Tags },
 ]
@@ -99,6 +105,8 @@ function UsaPageContent() {
         {tab === 'venta' && <UsaVentaTab metodosPago={metodosPago} />}
         {tab === 'historial' && <UsaHistorialTab />}
         {tab === 'por-cobrar' && <UsaCuentasPorCobrarTab metodosPago={metodosPago} />}
+        {tab === 'propinas' && <UsaPropinasTab metodosPago={metodosPago} />}
+        {tab === 'insumos' && <UsaInsumosTab />}
         {tab === 'inventario' && <UsaInventarioTab />}
         {tab === 'catalogo' && <UsaCatalogoTab />}
       </div>

@@ -40,6 +40,7 @@ const TIPO_LABEL: Record<UsaTipoMovimiento, { label: string; variant: 'success' 
   ajuste: { label: 'Ajuste', variant: 'info' },
   venta: { label: 'Venta', variant: 'secondary' },
   devolucion: { label: 'Devolución', variant: 'outline' },
+  consumo: { label: 'Insumo', variant: 'outline' },
 }
 
 // Inventario del Módulo USA (una sola bodega, separado de las bodegas de Colombia).

@@ -56,7 +56,7 @@ export interface UsaServicioUpdate {
   activo?: boolean
 }
 
-export type UsaTipoMovimiento = 'entrada' | 'ajuste' | 'venta' | 'devolucion'
+export type UsaTipoMovimiento = 'entrada' | 'ajuste' | 'venta' | 'devolucion' | 'consumo'
 
 export interface UsaMovimiento {
   id: number
@@ -98,6 +98,54 @@ export interface UsaAbono {
   fecha: string
   notas: string | null
   usuario_nombre: string | null
+  es_pago_inicial: boolean // recibido con la venta (pago mixto) vs cobro posterior
+}
+
+export interface UsaTip {
+  id: number
+  venta_id: number | null
+  cliente_nombre: string | null
+  monto: number
+  metodo_pago: string
+  para: string | null
+  fecha: string
+  notas: string | null
+  usuario_nombre: string | null
+}
+
+export interface UsaTipPayload {
+  venta_id?: number | null
+  monto: number
+  metodo_pago: string
+  para?: string | null
+  fecha?: string
+  notas?: string | null
+}
+
+export interface UsaConsumo {
+  id: number
+  producto_id: number
+  producto_nombre: string
+  cantidad: number
+  motivo: string
+  costo_unitario: number
+  costo_total: number
+  fecha: string
+  notas: string | null
+  usuario_nombre: string | null
+}
+
+export interface UsaConsumoPayload {
+  producto_id: number
+  cantidad: number
+  motivo: string
+  fecha?: string
+  notas?: string | null
+}
+
+export interface UsaPagoPayload {
+  metodo_pago: string
+  monto: number
 }
 
 export interface UsaVenta {
@@ -120,6 +168,8 @@ export interface UsaVenta {
   fecha_pago_total: string | null
   dias_vencida: number
   abonos: UsaAbono[]
+  tips: UsaTip[]
+  tips_total: number
 }
 
 export interface UsaAbonoPayload {
@@ -140,13 +190,12 @@ export interface UsaVentaItemPayload {
 export interface UsaVentaPayload {
   fecha?: string
   cliente_nombre?: string | null
-  metodo_pago?: string // no aplica en ventas a crédito
   notas?: string | null
   items: UsaVentaItemPayload[]
-  a_credito?: boolean
+  // Pagos mixtos: si la suma es menor al total, el resto queda a crédito.
+  pagos: UsaPagoPayload[]
   fecha_vencimiento?: string | null
-  abono_inicial?: number | null
-  metodo_abono_inicial?: string | null
+  tips?: Omit<UsaTipPayload, 'venta_id' | 'fecha'>[]
 }
 
 export interface UsaResumen {
@@ -162,6 +211,13 @@ export interface UsaResumen {
   por_cobrar: number
   cobrado_credito: number
   por_metodo_pago: { metodo_pago: string; ventas: number; monto: number }[]
+  tips_total: number
+  tips_cantidad: number
+  tips_por_metodo: { metodo_pago: string; cantidad: number; monto: number }[]
+  tips_por_persona: { para: string; cantidad: number; monto: number }[]
+  insumos_costo: number
+  insumos_unidades: number
+  ganancia_neta: number
   top_productos: { nombre: string; cantidad: number; monto: number }[]
   top_servicios: { nombre: string; cantidad: number; monto: number }[]
 }

@@ -5,9 +5,11 @@ import {
   Ban,
   ChevronDown,
   ChevronRight,
+  Coins,
   DollarSign,
   Loader2,
   Package,
+  PackageMinus,
   Receipt,
   RefreshCw,
   Sparkles,
@@ -192,6 +194,29 @@ export function UsaHistorialTab() {
         />
       </div>
 
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        <StatCard
+          label="Propinas"
+          value={formatUSD(resumen?.tips_total ?? 0)}
+          subtitle={`≈ ${cop(resumen?.tips_total ?? 0)} · ${resumen?.tips_cantidad ?? 0} · aparte de los ingresos`}
+          icon={Coins}
+        />
+        <StatCard
+          label="Insumos usados"
+          value={formatUSD(resumen?.insumos_costo ?? 0)}
+          subtitle={`≈ ${cop(resumen?.insumos_costo ?? 0)} · ${resumen?.insumos_unidades ?? 0} unidad(es)`}
+          icon={PackageMinus}
+          tone="warning"
+        />
+        <StatCard
+          label="Ganancia neta"
+          value={formatUSD(resumen?.ganancia_neta ?? 0)}
+          subtitle={`≈ ${cop(resumen?.ganancia_neta ?? 0)} · bruta menos insumos`}
+          icon={TrendingUp}
+          tone="positive"
+        />
+      </div>
+
       {resumen && resumen.ventas_credito > 0 && (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
           <span className="font-semibold text-amber-800">
@@ -294,20 +319,21 @@ export function UsaHistorialTab() {
                           {v.cliente_nombre ?? <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          {v.a_credito ? (
-                            <Badge
-                              className={cn(
-                                'border-transparent text-white',
-                                v.saldo_pendiente > 0 ? 'bg-amber-500' : 'bg-green-600',
-                              )}
-                            >
-                              {v.saldo_pendiente > 0
-                                ? `Crédito · debe ${formatUSD(v.saldo_pendiente)}`
-                                : 'Crédito · cobrada'}
-                            </Badge>
-                          ) : (
+                          <div className="flex flex-wrap items-center gap-1">
                             <Badge variant="outline">{v.metodo_pago}</Badge>
-                          )}
+                            {v.saldo_pendiente > 0 ? (
+                              <Badge className="border-transparent bg-amber-500 text-white">
+                                debe {formatUSD(v.saldo_pendiente)}
+                              </Badge>
+                            ) : v.a_credito ? (
+                              <Badge className="border-transparent bg-green-600 text-white">cobrada</Badge>
+                            ) : null}
+                            {v.tips_total > 0 && (
+                              <Badge variant="info" className="gap-1">
+                                <Coins className="h-3 w-3" /> {formatUSD(v.tips_total)}
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-muted-foreground">
                           {v.items.length}
@@ -360,6 +386,34 @@ export function UsaHistorialTab() {
                                   </li>
                                 ))}
                               </ul>
+                              {(v.abonos.length > 0 || v.tips.length > 0) && (
+                                <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+                                  {v.abonos.length > 0 && (
+                                    <span>
+                                      <span className="text-muted-foreground">Pagos: </span>
+                                      {v.abonos.map((a, idx) => (
+                                        <span key={a.id}>
+                                          {idx > 0 && ' · '}
+                                          {a.metodo_pago} <span className="tabular-nums">{formatUSD(a.monto)}</span>
+                                          {!a.es_pago_inicial && ' (cobro posterior)'}
+                                        </span>
+                                      ))}
+                                    </span>
+                                  )}
+                                  {v.tips.length > 0 && (
+                                    <span>
+                                      <span className="text-muted-foreground">Propina: </span>
+                                      {v.tips.map((t, idx) => (
+                                        <span key={t.id}>
+                                          {idx > 0 && ' · '}
+                                          <span className="tabular-nums">{formatUSD(t.monto)}</span> ({t.metodo_pago}
+                                          {t.para ? ` · para ${t.para}` : ''})
+                                        </span>
+                                      ))}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                               <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
                                 {v.usuario_nombre && <span>Registrada por {v.usuario_nombre}</span>}
                                 {v.notas && <span>Notas: {v.notas}</span>}

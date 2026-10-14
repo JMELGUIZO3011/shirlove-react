@@ -3,6 +3,10 @@ import { ApiEndpoints } from '@/config/api'
 import type {
   UsaAbonoPayload,
   UsaAcceso,
+  UsaConsumo,
+  UsaConsumoPayload,
+  UsaTip,
+  UsaTipPayload,
   UsaEstado,
   UsaMovimiento,
   UsaProducto,
@@ -141,6 +145,41 @@ export const usaService = {
 
   async eliminarAbono(ventaId: number, abonoId: number): Promise<UsaVenta> {
     const { data } = await apiClient.delete<UsaVenta>(`${BASE}/ventas/${ventaId}/abonos/${abonoId}`)
+    return data
+  },
+
+  // ---- Propinas ----
+  async getTips(inicio: string, fin: string): Promise<UsaTip[]> {
+    const { data } = await apiClient.get<UsaTip[]>(`${BASE}/tips`, {
+      params: { fecha_inicio: inicio, fecha_fin: fin },
+    })
+    return data
+  },
+
+  async registrarTip(payload: UsaTipPayload): Promise<UsaTip> {
+    const { data } = await apiClient.post<UsaTip>(`${BASE}/tips`, payload)
+    return data
+  },
+
+  async eliminarTip(id: number): Promise<void> {
+    await apiClient.delete(`${BASE}/tips/${id}`)
+  },
+
+  // ---- Insumos (consumos internos) ----
+  async getConsumos(inicio: string, fin: string): Promise<UsaConsumo[]> {
+    const { data } = await apiClient.get<UsaConsumo[]>(`${BASE}/consumos`, {
+      params: { fecha_inicio: inicio, fecha_fin: fin },
+    })
+    return data
+  },
+
+  async registrarConsumo(payload: UsaConsumoPayload): Promise<UsaConsumo> {
+    const { data } = await apiClient.post<UsaConsumo>(`${BASE}/consumos`, payload)
+    return data
+  },
+
+  async eliminarConsumo(id: number): Promise<{ message: string }> {
+    const { data } = await apiClient.delete<{ message: string }>(`${BASE}/consumos/${id}`)
     return data
   },
 

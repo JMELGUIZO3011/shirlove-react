@@ -6,7 +6,9 @@ import { setUsaToken } from '@/lib/usaAccess'
 import { toBackendRange, type DateRange } from '@/lib/dateRange'
 import type {
   UsaAbonoPayload,
+  UsaConsumoPayload,
   UsaProductoPayload,
+  UsaTipPayload,
   UsaProductoUpdate,
   UsaServicioPayload,
   UsaServicioUpdate,
@@ -176,6 +178,7 @@ export function useUsaRegistrarVenta() {
       qc.invalidateQueries({ queryKey: [USA, 'cuentas-por-cobrar'] })
       qc.invalidateQueries({ queryKey: [USA, 'resumen'] })
       qc.invalidateQueries({ queryKey: [USA, 'movimientos'] })
+      qc.invalidateQueries({ queryKey: [USA, 'tips'] })
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'No se pudo registrar la venta')),
   })
@@ -251,6 +254,86 @@ export function useUsaEliminarAbono() {
       toast.success('Cobro eliminado; el saldo volvió a quedar pendiente')
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'No se pudo eliminar el cobro')),
+  })
+}
+
+// ---- Propinas ----
+
+export function useUsaTips(range: DateRange) {
+  const { inicio, fin } = toBackendRange(range)
+  return useQuery({
+    queryKey: [USA, 'tips', inicio, fin],
+    queryFn: () => usaService.getTips(inicio, fin),
+    enabled: Boolean(range.inicio && range.fin),
+    staleTime: 60_000,
+  })
+}
+
+export function useUsaRegistrarTip() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: UsaTipPayload) => usaService.registrarTip(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [USA, 'tips'] })
+      invalidarVentas(qc)
+      toast.success('Propina registrada')
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'No se pudo registrar la propina')),
+  })
+}
+
+export function useUsaEliminarTip() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => usaService.eliminarTip(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [USA, 'tips'] })
+      invalidarVentas(qc)
+      toast.success('Propina eliminada')
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'No se pudo eliminar la propina')),
+  })
+}
+
+// ---- Insumos ----
+
+export function useUsaConsumos(range: DateRange) {
+  const { inicio, fin } = toBackendRange(range)
+  return useQuery({
+    queryKey: [USA, 'consumos', inicio, fin],
+    queryFn: () => usaService.getConsumos(inicio, fin),
+    enabled: Boolean(range.inicio && range.fin),
+    staleTime: 60_000,
+  })
+}
+
+export function useUsaRegistrarConsumo() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: UsaConsumoPayload) => usaService.registrarConsumo(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [USA, 'consumos'] })
+      qc.invalidateQueries({ queryKey: [USA, 'productos'] })
+      qc.invalidateQueries({ queryKey: [USA, 'movimientos'] })
+      qc.invalidateQueries({ queryKey: [USA, 'resumen'] })
+      toast.success('Insumo registrado (inventario descontado)')
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'No se pudo registrar el insumo')),
+  })
+}
+
+export function useUsaEliminarConsumo() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => usaService.eliminarConsumo(id),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: [USA, 'consumos'] })
+      qc.invalidateQueries({ queryKey: [USA, 'productos'] })
+      qc.invalidateQueries({ queryKey: [USA, 'movimientos'] })
+      qc.invalidateQueries({ queryKey: [USA, 'resumen'] })
+      toast.success(data.message)
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'No se pudo eliminar el insumo')),
   })
 }
 

@@ -251,7 +251,7 @@ export function UsaCuentasPorCobrarTab({ metodosPago }: Props) {
                               </div>
                               <div>
                                 <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                  Cobros registrados
+                                  Pagos registrados
                                 </p>
                                 {v.abonos.length === 0 ? (
                                   <p className="rounded-lg border bg-white px-3 py-2 text-muted-foreground">
@@ -265,6 +265,9 @@ export function UsaCuentasPorCobrarTab({ metodosPago }: Props) {
                                           <div className="flex items-center gap-2">
                                             <span className="font-medium tabular-nums">{formatUSD(a.monto)}</span>
                                             <Badge variant="outline">{a.metodo_pago}</Badge>
+                                            {a.es_pago_inicial && (
+                                              <span className="text-xs text-muted-foreground">con la venta</span>
+                                            )}
                                           </div>
                                           <p className="text-xs text-muted-foreground">
                                             {formatFechaHora(a.fecha)}
