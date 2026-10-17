@@ -11,6 +11,7 @@ import {
   Package,
   Pencil,
   Globe,
+  Scissors,
   LogOut,
   UserPlus,
   ChevronRight,
@@ -99,6 +100,13 @@ const MENU_ITEMS: MenuItem[] = [
     icon: Pencil,
     color: '#0d9488',
     route: '/productos',
+    adminOnly: true,
+  },
+  {
+    title: 'Estilistas',
+    icon: Scissors,
+    color: '#db2777',
+    route: '/estilistas',
     adminOnly: true,
   },
   {

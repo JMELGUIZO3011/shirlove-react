@@ -39,6 +39,9 @@ const GestionProductosPage = lazy(() =>
     default: m.GestionProductosPage,
   })),
 )
+const EstilistasPage = lazy(() =>
+  import('@/pages/EstilistasPage').then((m) => ({ default: m.EstilistasPage })),
+)
 const UsaPage = lazy(() =>
   import('@/pages/UsaPage').then((m) => ({ default: m.UsaPage })),
 )
@@ -150,6 +153,14 @@ export default function App() {
         element={
           <ProtectedRoute requireAdmin>
             <GestionProductosPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/estilistas"
+        element={
+          <ProtectedRoute requireAdmin>
+            <EstilistasPage />
           </ProtectedRoute>
         }
       />
