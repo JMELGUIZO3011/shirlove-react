@@ -161,7 +161,7 @@ export function UsaInventarioTab() {
                     <TableHead>Producto</TableHead>
                     <TableHead className="text-right">Stock</TableHead>
                     <TableHead className="hidden sm:table-cell text-right">Costo</TableHead>
-                    <TableHead className="hidden sm:table-cell text-right">Precio</TableHead>
+                    <TableHead className="hidden sm:table-cell text-right">Precio particular</TableHead>
                     <TableHead className="hidden md:table-cell text-right">Valor (costo)</TableHead>
                     <TableHead className="w-24" />
                   </TableRow>

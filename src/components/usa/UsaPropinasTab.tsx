@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AlertCircle, Coins, Loader2, Plus, Trash2, Users } from 'lucide-react'
+import { AlertCircle, Coins, Loader2, Pencil, Plus, Trash2, Users } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useUsaEliminarTip, useUsaResumen, useUsaTips } from '@/hooks/useUsa'
 import { presetRange, type DateRange } from '@/lib/dateRange'
@@ -37,6 +37,7 @@ export function UsaPropinasTab({ metodosPago }: Props) {
   const { user } = useAuth()
   const [range, setRange] = useState<DateRange>(() => presetRange('mes'))
   const [formOpen, setFormOpen] = useState(false)
+  const [toEdit, setToEdit] = useState<UsaTip | null>(null)
   const [toDelete, setToDelete] = useState<UsaTip | null>(null)
 
   const tipsQ = useUsaTips(range)
@@ -151,7 +152,7 @@ export function UsaPropinasTab({ metodosPago }: Props) {
                 <TableHead>Para</TableHead>
                 <TableHead className="hidden sm:table-cell">Método</TableHead>
                 <TableHead className="text-right">Monto</TableHead>
-                <TableHead className="w-12" />
+                <TableHead className="w-20" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -188,17 +189,30 @@ export function UsaPropinasTab({ metodosPago }: Props) {
                       {formatUSD(t.monto)}
                     </TableCell>
                     <TableCell>
-                      {user?.esAdmin && (
+                      <div className="flex justify-end gap-0.5">
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => setToDelete(t)}
-                          aria-label="Eliminar propina"
+                          onClick={() => setToEdit(t)}
+                          aria-label="Editar propina"
+                          title="Editar propina"
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <Pencil className="h-4 w-4 text-navy" />
                         </Button>
-                      )}
+                        {user?.esAdmin && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setToDelete(t)}
+                            aria-label="Eliminar propina"
+                            title="Eliminar propina"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -213,6 +227,13 @@ export function UsaPropinasTab({ metodosPago }: Props) {
         onOpenChange={setFormOpen}
         metodosPago={metodosPago}
         personas={personas}
+      />
+      <UsaPropinaDialog
+        open={toEdit !== null}
+        onOpenChange={(o) => !o && setToEdit(null)}
+        metodosPago={metodosPago}
+        personas={personas}
+        tip={toEdit}
       />
 
       <AlertDialog open={toDelete !== null} onOpenChange={(o) => !o && setToDelete(null)}>

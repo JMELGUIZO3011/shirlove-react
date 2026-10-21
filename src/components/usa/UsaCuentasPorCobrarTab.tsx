@@ -239,6 +239,7 @@ export function UsaCuentasPorCobrarTab({ metodosPago }: Props) {
                                         {i.descripcion}
                                         <span className="ml-2 text-xs text-muted-foreground">
                                           {i.cantidad} × {formatUSD(i.precio_unitario)}
+                                          {i.lista_precio && i.lista_precio !== 'Particular' && ` · ${i.lista_precio}`}
                                         </span>
                                       </span>
                                       <span className="font-medium tabular-nums">{formatUSD(i.subtotal)}</span>

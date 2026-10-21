@@ -9,6 +9,7 @@ import type {
   UsaConsumoPayload,
   UsaProductoPayload,
   UsaTipPayload,
+  UsaTipUpdatePayload,
   UsaProductoUpdate,
   UsaServicioPayload,
   UsaServicioUpdate,
@@ -40,7 +41,9 @@ export function useUsaAcceder() {
     mutationFn: (password: string) => usaService.acceder(password),
     onSuccess: (data) => {
       setUsaToken(data.usa_token)
-      qc.invalidateQueries({ queryKey: [USA] })
+      // Se espera la recarga del estado para que UsaGate no vea el "acceso_valido: false"
+      // anterior al token y lo descarte de inmediato.
+      return qc.invalidateQueries({ queryKey: [USA] })
     },
   })
 }
@@ -295,6 +298,20 @@ export function useUsaRegistrarTip() {
       toast.success('Propina registrada')
     },
     onError: (e) => toast.error(getApiErrorMessage(e, 'No se pudo registrar la propina')),
+  })
+}
+
+export function useUsaActualizarTip() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: UsaTipUpdatePayload }) =>
+      usaService.actualizarTip(id, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [USA, 'tips'] })
+      invalidarVentas(qc)
+      toast.success('Propina actualizada')
+    },
+    onError: (e) => toast.error(getApiErrorMessage(e, 'No se pudo actualizar la propina')),
   })
 }
 

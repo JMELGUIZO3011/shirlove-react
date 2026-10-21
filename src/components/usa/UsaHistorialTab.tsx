@@ -425,6 +425,11 @@ export function UsaHistorialTab({ metodosPago }: Props) {
                                       <span className="text-xs text-muted-foreground">
                                         {i.cantidad} × {formatUSD(i.precio_unitario)}
                                       </span>
+                                      {i.lista_precio && i.lista_precio !== 'Particular' && (
+                                        <Badge variant="outline" className="shrink-0">
+                                          {i.lista_precio}
+                                        </Badge>
+                                      )}
                                     </div>
                                     <span className="text-right">
                                       <span className="font-medium tabular-nums">{formatUSD(i.subtotal)}</span>

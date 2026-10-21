@@ -26,11 +26,11 @@ export function UsaGate({ children }: { children: ReactNode }) {
 
   // Token guardado pero ya vencido (p. ej. al recargar horas después): descartarlo.
   useEffect(() => {
-    if (token && estadoQ.data && !estadoQ.data.acceso_valido) {
+    if (token && estadoQ.data && !estadoQ.data.acceso_valido && !estadoQ.isFetching) {
       clearUsaToken()
       setToken(null)
     }
-  }, [token, estadoQ.data])
+  }, [token, estadoQ.data, estadoQ.isFetching])
 
   if (estadoQ.isLoading) {
     return (

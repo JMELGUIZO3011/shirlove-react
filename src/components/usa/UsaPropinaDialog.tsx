@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useUsaRegistrarTip } from '@/hooks/useUsa'
+import { useUsaActualizarTip, useUsaRegistrarTip } from '@/hooks/useUsa'
 import { dateWithCurrentTime, toLocalDateTimeISO } from '@/lib/dateRange'
 import { formatFechaHora, formatUSD } from '@/lib/format'
-import type { UsaVenta } from '@/types/usa'
+import type { UsaTip, UsaVenta } from '@/types/usa'
 import { AutocompleteInput } from '@/components/AutocompleteInput'
 import {
   Dialog,
@@ -33,11 +33,26 @@ interface Props {
   personas?: string[]
   /** Si se pasa, la propina queda ligada a esta venta (y no se pide el número). */
   venta?: UsaVenta | null
+  /** Si se pasa, el diálogo edita esta propina en vez de crear una nueva. */
+  tip?: UsaTip | null
 }
 
-// Registrar una propina: suelta (con N° de venta opcional) o para una venta concreta.
-export function UsaPropinaDialog({ open, onOpenChange, metodosPago, personas = [], venta }: Props) {
+function toLocalInput(iso: string): string {
+  // 'YYYY-MM-DDTHH:mm' para <input type="datetime-local"> en hora local
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+// Registrar una propina (suelta, con N° de venta opcional, o para una venta concreta)
+// o editar una ya registrada (monto, método, para quién, fecha, notas y venta).
+export function UsaPropinaDialog({ open, onOpenChange, metodosPago, personas = [], venta, tip }: Props) {
   const registrar = useUsaRegistrarTip()
+  const actualizar = useUsaActualizarTip()
+  const isEdit = Boolean(tip)
+  const saving = registrar.isPending || actualizar.isPending
+
   const [monto, setMonto] = useState('')
   const [metodo, setMetodo] = useState('')
   const [para, setPara] = useState('')
@@ -46,7 +61,15 @@ export function UsaPropinaDialog({ open, onOpenChange, metodosPago, personas = [
   const [notas, setNotas] = useState('')
 
   useEffect(() => {
-    if (open) {
+    if (!open) return
+    if (tip) {
+      setMonto(String(tip.monto))
+      setMetodo(tip.metodo_pago)
+      setPara(tip.para ?? '')
+      setVentaId(tip.venta_id ? String(tip.venta_id) : '')
+      setFecha(toLocalInput(tip.fecha))
+      setNotas(tip.notas ?? '')
+    } else {
       setMonto('')
       setMetodo('')
       setPara('')
@@ -54,7 +77,7 @@ export function UsaPropinaDialog({ open, onOpenChange, metodosPago, personas = [
       setFecha('')
       setNotas('')
     }
-  }, [open])
+  }, [open, tip])
 
   async function handleSave() {
     const montoNum = Number(monto)
@@ -66,15 +89,30 @@ export function UsaPropinaDialog({ open, onOpenChange, metodosPago, personas = [
       if (!Number.isInteger(ventaNum) || ventaNum <= 0) return toast.warning('El número de venta no es válido')
     }
     try {
-      await registrar.mutateAsync({
-        venta_id: ventaNum,
-        monto: Math.round(montoNum * 100) / 100,
-        metodo_pago: metodo,
-        para: para.trim() || null,
-        // Sin fecha: si es para una venta, el backend usa la fecha de la venta.
-        fecha: fecha ? dateWithCurrentTime(fecha) : venta ? undefined : toLocalDateTimeISO(),
-        notas: notas.trim() || null,
-      })
+      if (tip) {
+        if (!fecha) return toast.warning('Indique la fecha de la propina')
+        await actualizar.mutateAsync({
+          id: tip.id,
+          payload: {
+            venta_id: ventaNum,
+            monto: Math.round(montoNum * 100) / 100,
+            metodo_pago: metodo,
+            para: para.trim() || null,
+            fecha: fecha.length === 16 ? `${fecha}:00` : fecha,
+            notas: notas.trim() || null,
+          },
+        })
+      } else {
+        await registrar.mutateAsync({
+          venta_id: ventaNum,
+          monto: Math.round(montoNum * 100) / 100,
+          metodo_pago: metodo,
+          para: para.trim() || null,
+          // Sin fecha: si es para una venta, el backend usa la fecha de la venta.
+          fecha: fecha ? dateWithCurrentTime(fecha) : venta ? undefined : toLocalDateTimeISO(),
+          notas: notas.trim() || null,
+        })
+      }
       onOpenChange(false)
     } catch {
       /* toast lo maneja el hook */
@@ -86,15 +124,27 @@ export function UsaPropinaDialog({ open, onOpenChange, metodosPago, personas = [
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-navy">
-            {venta ? `Propina para la venta #${venta.id}` : 'Registrar propina'}
+            {tip
+              ? `Editar propina de ${formatUSD(tip.monto)}`
+              : venta
+                ? `Propina para la venta #${venta.id}`
+                : 'Registrar propina'}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          {venta && (
+          {venta && !tip && (
             <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
               {venta.cliente_nombre ?? 'Sin clienta'} · {formatFechaHora(venta.fecha)} ·{' '}
               {formatUSD(venta.total)}
               {venta.tips_total > 0 && ` · ya tiene ${formatUSD(venta.tips_total)} en propinas`}
+            </p>
+          )}
+          {tip && (
+            <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+              Registrada el {formatFechaHora(tip.fecha)}
+              {tip.venta_id ? ` · venta #${tip.venta_id}` : ' · sin venta asociada'}
+              {tip.cliente_nombre ? ` · ${tip.cliente_nombre}` : ''}
+              {tip.usuario_nombre ? ` · por ${tip.usuario_nombre}` : ''}
             </p>
           )}
           <div className="grid grid-cols-2 gap-4">
@@ -150,12 +200,18 @@ export function UsaPropinaDialog({ open, onOpenChange, metodosPago, personas = [
                   onChange={(e) => setVentaId(e.target.value)}
                   placeholder="Ej: 12"
                 />
+                {tip && <p className="text-xs text-muted-foreground">Vacío = sin venta asociada.</p>}
               </div>
             )}
             <div className="space-y-1.5">
-              <Label htmlFor="usa-tip-fecha">Fecha (opcional)</Label>
-              <Input id="usa-tip-fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
-              {venta && (
+              <Label htmlFor="usa-tip-fecha">{tip ? 'Fecha y hora' : 'Fecha (opcional)'}</Label>
+              <Input
+                id="usa-tip-fecha"
+                type={tip ? 'datetime-local' : 'date'}
+                value={fecha}
+                onChange={(e) => setFecha(e.target.value)}
+              />
+              {venta && !tip && (
                 <p className="text-xs text-muted-foreground">Si se deja vacía, usa la fecha de la venta.</p>
               )}
             </div>
@@ -166,12 +222,12 @@ export function UsaPropinaDialog({ open, onOpenChange, metodosPago, personas = [
           </div>
         </div>
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={registrar.isPending}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancelar
           </Button>
-          <Button variant="secondary" onClick={handleSave} disabled={registrar.isPending}>
-            {registrar.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            Registrar propina
+          <Button variant="secondary" onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isEdit ? 'Guardar cambios' : 'Registrar propina'}
           </Button>
         </DialogFooter>
       </DialogContent>

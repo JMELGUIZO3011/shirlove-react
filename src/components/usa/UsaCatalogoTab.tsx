@@ -8,7 +8,7 @@ import {
 } from '@/hooks/useUsa'
 import { formatUSD } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import type { UsaProducto, UsaServicio } from '@/types/usa'
+import { USA_LISTAS_PRECIOS, type UsaProducto, type UsaServicio } from '@/types/usa'
 import { UsaProductoFormDialog } from '@/components/usa/UsaProductoFormDialog'
 import { UsaServicioFormDialog } from '@/components/usa/UsaServicioFormDialog'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,17 @@ import {
 } from '@/components/ui/table'
 
 type Sub = 'productos' | 'servicios'
+
+// Mayorista, Estilista y Beauty Boss (Particular es precio_venta y siempre existe).
+const LISTAS_OPCIONALES = USA_LISTAS_PRECIOS.filter((l) => l.nombre !== 'Particular')
+
+// Texto corto con las otras listas, para pantallas donde no caben las columnas.
+function resumenListas(p: UsaProducto): string {
+  return LISTAS_OPCIONALES.map((l) => {
+    const v = p[l.campo]
+    return `${l.corto} ${v === null ? '—' : formatUSD(v)}`
+  }).join(' · ')
+}
 
 // Catálogo del Módulo USA: productos y servicios propios (independientes de Colombia).
 export function UsaCatalogoTab() {
@@ -119,7 +130,10 @@ export function UsaCatalogoTab() {
             <TableHeader>
               <TableRow>
                 <TableHead>Producto</TableHead>
-                <TableHead className="text-right">Precio</TableHead>
+                <TableHead className="text-right">Particular</TableHead>
+                <TableHead className="hidden lg:table-cell text-right">Mayorista</TableHead>
+                <TableHead className="hidden lg:table-cell text-right">Estilista</TableHead>
+                <TableHead className="hidden lg:table-cell text-right">Beauty Boss</TableHead>
                 <TableHead className="hidden sm:table-cell text-right">Costo</TableHead>
                 <TableHead className="hidden md:table-cell text-right">Margen</TableHead>
                 <TableHead className="hidden sm:table-cell text-right">Stock</TableHead>
@@ -130,7 +144,7 @@ export function UsaCatalogoTab() {
             <TableBody>
               {productos.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                     No hay productos USA. Cree el primero con «Nuevo producto».
                   </TableCell>
                 </TableRow>
@@ -149,7 +163,18 @@ export function UsaCatalogoTab() {
                       </TableCell>
                       <TableCell className="text-right font-semibold tabular-nums text-navy">
                         {formatUSD(p.precio_venta)}
+                        <span className="block text-[11px] font-normal text-muted-foreground lg:hidden">
+                          {resumenListas(p)}
+                        </span>
                       </TableCell>
+                      {LISTAS_OPCIONALES.map((l) => {
+                        const valor = p[l.campo]
+                        return (
+                          <TableCell key={l.campo} className="hidden lg:table-cell text-right tabular-nums">
+                            {valor === null ? <span className="text-muted-foreground">—</span> : formatUSD(valor)}
+                          </TableCell>
+                        )
+                      })}
                       <TableCell className="hidden sm:table-cell text-right tabular-nums text-muted-foreground">
                         {formatUSD(p.costo)}
                       </TableCell>

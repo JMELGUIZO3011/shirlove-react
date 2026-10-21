@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { formatUSD } from '@/lib/format'
-import { type UsaCartItem, type UsaProducto, type UsaServicio } from '@/types/usa'
+import { cn } from '@/lib/utils'
+import {
+  USA_LISTAS_PRECIOS,
+  usaPrecioEnLista,
+  type UsaCartItem,
+  type UsaListaPrecio,
+  type UsaProducto,
+  type UsaServicio,
+} from '@/types/usa'
 import {
   Dialog,
   DialogContent,
@@ -20,32 +28,45 @@ type Seleccion =
 
 interface Props {
   seleccion: Seleccion | null
+  /** Lista de precios elegida para la venta (queda preseleccionada en los productos). */
+  listaInicial: UsaListaPrecio
   onClose: () => void
   onAdd: (item: UsaCartItem) => void
 }
 
-// Configura cantidad y precio (USD) de un producto o servicio antes de
-// agregarlo al carrito del punto de venta USA.
-export function UsaItemDialog({ seleccion, onClose, onAdd }: Props) {
+// Configura cantidad, lista de precios y precio (USD) de un producto o servicio
+// antes de agregarlo al carrito del punto de venta USA.
+export function UsaItemDialog({ seleccion, listaInicial, onClose, onAdd }: Props) {
   const [cantidad, setCantidad] = useState('1')
   const [precio, setPrecio] = useState('')
+  const [lista, setLista] = useState<UsaListaPrecio>(listaInicial)
 
   const open = seleccion !== null
-  const precioBase =
-    seleccion?.tipo === 'producto' ? seleccion.producto.precio_venta : seleccion?.servicio.precio ?? 0
-  const stock = seleccion?.tipo === 'producto' ? seleccion.producto.cantidad : null
-  const nombre =
-    seleccion?.tipo === 'producto'
-      ? seleccion.producto.nombre
-      : seleccion
-        ? `${seleccion.servicio.categoria} — ${seleccion.servicio.nombre}`
-        : ''
+  const producto = seleccion?.tipo === 'producto' ? seleccion.producto : null
+  // Precio de referencia: el de la lista elegida; si el producto no lo tiene, el Particular.
+  const precioLista = producto ? usaPrecioEnLista(producto, lista) : null
+  const precioBase = producto
+    ? (precioLista ?? producto.precio_venta)
+    : seleccion?.tipo === 'servicio'
+      ? seleccion.servicio.precio
+      : 0
+  const stock = producto ? producto.cantidad : null
+  const nombre = producto
+    ? producto.nombre
+    : seleccion?.tipo === 'servicio'
+      ? `${seleccion.servicio.categoria} — ${seleccion.servicio.nombre}`
+      : ''
 
   useEffect(() => {
     if (open) {
       setCantidad('1')
-      setPrecio(String(precioBase))
+      setLista(listaInicial)
     }
+  }, [open, listaInicial])
+
+  // Al abrir o cambiar de lista, el precio se rellena con el de esa lista.
+  useEffect(() => {
+    if (open) setPrecio(String(precioBase))
   }, [open, precioBase])
 
   const cant = Number(cantidad)
@@ -68,6 +89,8 @@ export function UsaItemDialog({ seleccion, onClose, onAdd }: Props) {
         descripcion: seleccion.producto.nombre,
         cantidad: cant,
         precioUnitario: precioNum,
+        // Se registra la lista realmente usada (si no tenía precio en la elegida, Particular).
+        listaPrecio: precioLista === null ? 'Particular' : lista,
       })
     } else {
       onAdd({
@@ -84,13 +107,11 @@ export function UsaItemDialog({ seleccion, onClose, onAdd }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-navy">
             <span className="truncate">{nombre}</span>
-            <Badge variant={seleccion?.tipo === 'producto' ? 'secondary' : 'info'}>
-              {seleccion?.tipo === 'producto' ? 'Producto' : 'Servicio'}
-            </Badge>
+            <Badge variant={producto ? 'secondary' : 'info'}>{producto ? 'Producto' : 'Servicio'}</Badge>
           </DialogTitle>
         </DialogHeader>
 
@@ -103,6 +124,41 @@ export function UsaItemDialog({ seleccion, onClose, onAdd }: Props) {
               </span>
             </p>
           )}
+
+          {producto && (
+            <div className="space-y-1.5">
+              <Label>Lista de precios</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {USA_LISTAS_PRECIOS.map((l) => {
+                  const valor = usaPrecioEnLista(producto, l.nombre)
+                  const activa = lista === l.nombre
+                  return (
+                    <button
+                      key={l.nombre}
+                      type="button"
+                      onClick={() => setLista(l.nombre)}
+                      disabled={valor === null}
+                      className={cn(
+                        'flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm transition-colors',
+                        activa ? 'border-navy bg-navy text-white' : 'bg-white hover:bg-muted',
+                        valor === null && 'cursor-not-allowed opacity-50',
+                      )}
+                      aria-pressed={activa}
+                    >
+                      <span>{l.nombre}</span>
+                      <span className="font-semibold tabular-nums">{valor === null ? '—' : formatUSD(valor)}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {precioLista === null && (
+                <p className="text-xs text-amber-700">
+                  Este producto no tiene precio en la lista {lista}; se usa el precio Particular.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="usa-item-cant">Cantidad</Label>
@@ -129,7 +185,8 @@ export function UsaItemDialog({ seleccion, onClose, onAdd }: Props) {
           </div>
           {precioNum !== precioBase && (
             <p className="text-xs text-muted-foreground">
-              Precio de lista: {formatUSD(precioBase)}
+              Precio de lista{producto ? ` ${precioLista === null ? 'Particular' : lista}` : ''}:{' '}
+              {formatUSD(precioBase)}
             </p>
           )}
           <div className="flex items-baseline justify-between rounded-lg bg-muted px-3 py-2">

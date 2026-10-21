@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { useUsaActualizarProducto, useUsaCrearProducto } from '@/hooks/useUsa'
 import { useProductos as useProductosColombia } from '@/hooks/useVentas'
 import { formatUSD } from '@/lib/format'
-import type { UsaProducto } from '@/types/usa'
+import { USA_LISTAS_PRECIOS, type UsaListaPrecio, type UsaProducto } from '@/types/usa'
 import type { Producto as ProductoColombia } from '@/types/venta'
 import {
   Dialog,
@@ -24,7 +24,12 @@ interface Props {
   producto?: UsaProducto | null
 }
 
-// Crear / editar un producto del catálogo USA (precios en USD).
+type PreciosForm = Record<UsaListaPrecio, string>
+
+const PRECIOS_VACIOS: PreciosForm = { Particular: '', Mayorista: '', Estilista: '', 'Beauty Boss': '' }
+
+// Crear / editar un producto del catálogo USA: nombre, costo y las cuatro listas de
+// precios en USD (Particular obligatoria; Mayorista, Estilista y Beauty Boss opcionales).
 export function UsaProductoFormDialog({ open, onOpenChange, producto }: Props) {
   const isEdit = Boolean(producto)
   const crear = useUsaCrearProducto()
@@ -32,12 +37,13 @@ export function UsaProductoFormDialog({ open, onOpenChange, producto }: Props) {
   const saving = crear.isPending || actualizar.isPending
 
   const [nombre, setNombre] = useState('')
-  const [precio, setPrecio] = useState('')
+  const [precios, setPrecios] = useState<PreciosForm>(PRECIOS_VACIOS)
   const [costo, setCosto] = useState('')
   const [cantidadInicial, setCantidadInicial] = useState('0')
 
-  // Catálogo de Colombia: solo se usa para SUGERIR nombres (y precios en USD si
-  // existen). El producto USA se crea aparte; no se relaciona con el de Colombia.
+  // Catálogo de Colombia: solo se usa para SUGERIR nombres (y los precios en USD de
+  // cada lista si ya están definidos allá). El producto USA se crea aparte; no se
+  // relaciona con el de Colombia.
   const colombiaQ = useProductosColombia()
   const opcionesColombia: AutocompleteOption[] = useMemo(() => {
     const vistos = new Set<string>()
@@ -46,8 +52,8 @@ export function UsaProductoFormDialog({ open, onOpenChange, producto }: Props) {
       const n = p.nombre.trim()
       if (!n || vistos.has(n.toLowerCase())) continue
       vistos.add(n.toLowerCase())
-      const { venta } = preciosUsaDeColombia(p)
-      out.push({ value: n, detail: venta !== null ? formatUSD(venta) : undefined })
+      const { listas } = preciosUsaDeColombia(p)
+      out.push({ value: n, detail: listas.Particular !== null ? formatUSD(listas.Particular) : undefined })
     }
     return out.sort((a, b) => a.value.localeCompare(b.value, 'es'))
   }, [colombiaQ.data])
@@ -59,9 +65,16 @@ export function UsaProductoFormDialog({ open, onOpenChange, producto }: Props) {
     )
     if (!match) return
     // Si el producto de Colombia ya tiene precios definidos para USA, los proponemos
-    // (solo si el campo está vacío, para no pisar lo que la usuaria ya escribió).
-    const { venta, costo: costoUsa } = preciosUsaDeColombia(match)
-    if (venta !== null && !precio) setPrecio(String(venta))
+    // (solo en los campos vacíos, para no pisar lo que la usuaria ya escribió).
+    const { listas, costo: costoUsa } = preciosUsaDeColombia(match)
+    setPrecios((prev) => {
+      const next = { ...prev }
+      for (const l of USA_LISTAS_PRECIOS) {
+        const v = listas[l.nombre]
+        if (v !== null && !prev[l.nombre]) next[l.nombre] = String(v)
+      }
+      return next
+    })
     if (costoUsa !== null && !costo) setCosto(String(costoUsa))
   }
 
@@ -69,26 +82,46 @@ export function UsaProductoFormDialog({ open, onOpenChange, producto }: Props) {
     if (!open) return
     if (producto) {
       setNombre(producto.nombre)
-      setPrecio(String(producto.precio_venta))
+      setPrecios({
+        Particular: String(producto.precio_venta),
+        Mayorista: producto.precio_mayorista === null ? '' : String(producto.precio_mayorista),
+        Estilista: producto.precio_estilista === null ? '' : String(producto.precio_estilista),
+        'Beauty Boss': producto.precio_beauty_boss === null ? '' : String(producto.precio_beauty_boss),
+      })
       setCosto(String(producto.costo))
     } else {
       setNombre('')
-      setPrecio('')
+      setPrecios(PRECIOS_VACIOS)
       setCosto('')
       setCantidadInicial('0')
     }
   }, [open, producto])
 
-  const precioNum = Number(precio)
+  const precioNum = Number(precios.Particular)
   const costoNum = Number(costo)
   const margen =
     Number.isFinite(precioNum) && Number.isFinite(costoNum) && precioNum > 0
       ? ((precioNum - costoNum) / precioNum) * 100
       : null
 
+  // Convierte el texto de una lista opcional a número o null (vacío = sin precio en esa
+  // lista). undefined cuando el texto no es un número válido.
+  function listaOpcional(lista: UsaListaPrecio): number | null | undefined {
+    const txt = precios[lista].trim()
+    if (txt === '') return null
+    const n = Number(txt)
+    return Number.isFinite(n) && n >= 0 ? n : undefined
+  }
+
   async function handleSave() {
     if (!nombre.trim()) return toast.warning('Indique el nombre del producto')
-    if (!Number.isFinite(precioNum) || precioNum < 0) return toast.warning('Ingrese un precio de venta válido')
+    if (precios.Particular.trim() === '' || !Number.isFinite(precioNum) || precioNum < 0)
+      return toast.warning('Ingrese un precio Particular válido')
+    const mayorista = listaOpcional('Mayorista')
+    const estilista = listaOpcional('Estilista')
+    const beautyBoss = listaOpcional('Beauty Boss')
+    if (mayorista === undefined || estilista === undefined || beautyBoss === undefined)
+      return toast.warning('Los precios de las listas deben ser números mayores o iguales a 0')
     if (!Number.isFinite(costoNum) || costoNum < 0) return toast.warning('Ingrese un costo válido')
     const cantInicial = Number(cantidadInicial || 0)
     if (!isEdit && (!Number.isInteger(cantInicial) || cantInicial < 0))
@@ -98,12 +131,22 @@ export function UsaProductoFormDialog({ open, onOpenChange, producto }: Props) {
       if (producto) {
         await actualizar.mutateAsync({
           id: producto.id,
-          payload: { nombre: nombre.trim(), precio_venta: precioNum, costo: costoNum },
+          payload: {
+            nombre: nombre.trim(),
+            precio_venta: precioNum,
+            precio_mayorista: mayorista,
+            precio_estilista: estilista,
+            precio_beauty_boss: beautyBoss,
+            costo: costoNum,
+          },
         })
       } else {
         await crear.mutateAsync({
           nombre: nombre.trim(),
           precio_venta: precioNum,
+          precio_mayorista: mayorista,
+          precio_estilista: estilista,
+          precio_beauty_boss: beautyBoss,
           costo: costoNum,
           cantidad_inicial: cantInicial,
         })
@@ -138,37 +181,53 @@ export function UsaProductoFormDialog({ open, onOpenChange, producto }: Props) {
             {!isEdit && (
               <p className="text-xs text-muted-foreground">
                 Puede elegir un nombre del catálogo de Colombia o escribir uno nuevo. Solo se
-                copia el nombre: el inventario y los precios USA son independientes.
+                copia el nombre (y los precios USD si ya existen allá): el inventario y los
+                precios USA son independientes.
               </p>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="usa-prod-precio">Precio de venta (USD)</Label>
-              <Input
-                id="usa-prod-precio"
-                type="number"
-                min={0}
-                step="0.01"
-                value={precio}
-                onChange={(e) => setPrecio(e.target.value)}
-              />
+
+          <div className="space-y-1.5">
+            <Label>Listas de precios (USD)</Label>
+            <div className="grid grid-cols-2 gap-3">
+              {USA_LISTAS_PRECIOS.map((l) => (
+                <div key={l.nombre} className="space-y-1">
+                  <Label htmlFor={`usa-prod-${l.campo}`} className="text-xs text-muted-foreground">
+                    {l.nombre}
+                    {l.nombre === 'Particular' ? '' : ' (opcional)'}
+                  </Label>
+                  <Input
+                    id={`usa-prod-${l.campo}`}
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={precios[l.nombre]}
+                    onChange={(e) => setPrecios((prev) => ({ ...prev, [l.nombre]: e.target.value }))}
+                  />
+                </div>
+              ))}
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="usa-prod-costo">Costo (USD)</Label>
-              <Input
-                id="usa-prod-costo"
-                type="number"
-                min={0}
-                step="0.01"
-                value={costo}
-                onChange={(e) => setCosto(e.target.value)}
-              />
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Particular es el precio al público. Si una lista queda vacía, en la venta se usa el
+              precio Particular.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="usa-prod-costo">Costo (USD)</Label>
+            <Input
+              id="usa-prod-costo"
+              type="number"
+              min={0}
+              step="0.01"
+              value={costo}
+              onChange={(e) => setCosto(e.target.value)}
+            />
           </div>
           {margen !== null && (
             <p className="text-xs text-muted-foreground">
-              Ganancia por unidad: {formatUSD(precioNum - costoNum)} ({margen.toFixed(0)}% de margen)
+              Ganancia por unidad (Particular): {formatUSD(precioNum - costoNum)} ({margen.toFixed(0)}%
+              de margen)
             </p>
           )}
           {!isEdit && (
@@ -203,15 +262,25 @@ export function UsaProductoFormDialog({ open, onOpenChange, producto }: Props) {
   )
 }
 
-// Busca en los precios del producto de Colombia los definidos para el país USA.
-// Devuelve null cuando no hay precio para proponer.
-function preciosUsaDeColombia(p: ProductoColombia): { venta: number | null; costo: number | null } {
+// Busca en los precios del producto de Colombia los definidos para el país USA, por
+// tipo de precio (Particular, Mayorista, Estilista, Beauty Boss y Costo).
+// null cuando no hay precio para proponer.
+function preciosUsaDeColombia(p: ProductoColombia): {
+  listas: Record<UsaListaPrecio, number | null>
+  costo: number | null
+} {
   const usa = p.precios.filter((pr) => pr.pais?.nombre?.toUpperCase() === 'USA')
-  const esCosto = (nombre?: string) => (nombre ?? '').toLowerCase().includes('costo')
-  const costo = usa.find((pr) => esCosto(pr.tipo_precio?.nombre))
-  const venta = usa.find((pr) => !esCosto(pr.tipo_precio?.nombre))
+  const porTipo = (nombre: string) => {
+    const pr = usa.find((x) => (x.tipo_precio?.nombre ?? '').toLowerCase() === nombre)
+    return pr ? pr.precio : null
+  }
   return {
-    venta: venta ? venta.precio : null,
-    costo: costo ? costo.precio : null,
+    listas: {
+      Particular: porTipo('particular'),
+      Mayorista: porTipo('mayorista'),
+      Estilista: porTipo('estilista'),
+      'Beauty Boss': porTipo('beauty boss'),
+    },
+    costo: porTipo('costo'),
   }
 }

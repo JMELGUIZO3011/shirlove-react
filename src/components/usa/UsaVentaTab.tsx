@@ -12,6 +12,7 @@ import {
   ShoppingCart,
   Sparkles,
   StickyNote,
+  Tags,
   Trash2,
   User,
   X,
@@ -20,7 +21,15 @@ import { useUsaProductos, useUsaRegistrarVenta, useUsaServicios } from '@/hooks/
 import { useClientes } from '@/hooks/useClientes'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { nombreCompleto } from '@/types/cliente'
-import { usaCartItemSubtotal, type UsaCartItem, type UsaVentaPayload } from '@/types/usa'
+import {
+  USA_LISTA_DEFAULT,
+  USA_LISTAS_PRECIOS,
+  usaCartItemSubtotal,
+  usaPrecioEnLista,
+  type UsaCartItem,
+  type UsaListaPrecio,
+  type UsaVentaPayload,
+} from '@/types/usa'
 import { formatUSD } from '@/lib/format'
 import { dateWithCurrentTime, toLocalDateTimeISO } from '@/lib/dateRange'
 import { cn } from '@/lib/utils'
@@ -87,6 +96,9 @@ export function UsaVentaTab({ metodosPago }: Props) {
   const [notas, setNotas] = useState('')
   const [cart, setCart] = useState<UsaCartItem[]>([])
   const [seleccion, setSeleccion] = useState<UsaItemSeleccion | null>(null)
+  // Lista de precios de la venta (Particular, Mayorista, Estilista o Beauty Boss).
+  // Se preselecciona al agregar cada producto; se puede cambiar por ítem.
+  const [lista, setLista] = useState<UsaListaPrecio>(USA_LISTA_DEFAULT)
 
   // Pagos mixtos
   const [pagos, setPagos] = useState<PagoLocal[]>([])
@@ -104,18 +116,22 @@ export function UsaVentaTab({ metodosPago }: Props) {
   const restante = Math.max(0, redondear(total - pagado))
   const quedaCredito = cart.length > 0 && restante > 0.009
 
-  const productoOptions: ComboboxOption[] = productos.map((p) => ({
-    value: String(p.id),
-    label: p.nombre,
-    node: (
-      <div className="flex w-full items-center justify-between gap-3">
-        <span className="truncate">{p.nombre}</span>
-        <span className="shrink-0 text-xs text-muted-foreground">
-          {formatUSD(p.precio_venta)} · stock {p.cantidad}
-        </span>
-      </div>
-    ),
-  }))
+  const productoOptions: ComboboxOption[] = productos.map((p) => {
+    const precioLista = usaPrecioEnLista(p, lista)
+    return {
+      value: String(p.id),
+      label: p.nombre,
+      node: (
+        <div className="flex w-full items-center justify-between gap-3">
+          <span className="truncate">{p.nombre}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {formatUSD(precioLista ?? p.precio_venta)}
+            {precioLista === null && lista !== 'Particular' && ' (Part.)'} · stock {p.cantidad}
+          </span>
+        </div>
+      ),
+    }
+  })
   const servicioOptions: ComboboxOption[] = servicios.map((s) => ({
     value: String(s.id),
     label: `${s.categoria} — ${s.nombre}`,
@@ -154,6 +170,7 @@ export function UsaVentaTab({ metodosPago }: Props) {
     setFecha('')
     setNotas('')
     setCart([])
+    setLista(USA_LISTA_DEFAULT)
     setPagos([])
     setPagoMetodo('')
     setPagoMonto('')
@@ -185,6 +202,7 @@ export function UsaVentaTab({ metodosPago }: Props) {
               producto_id: i.producto!.id,
               cantidad: i.cantidad,
               precio_unitario: i.precioUnitario,
+              lista_precio: i.listaPrecio,
             }
           : {
               tipo: 'servicio' as const,
@@ -230,6 +248,32 @@ export function UsaVentaTab({ metodosPago }: Props) {
           </div>
 
           <div className="mt-4 space-y-3 border-t pt-4">
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5 text-navy">
+                <Tags className="h-4 w-4" /> Lista de precios
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                {USA_LISTAS_PRECIOS.map((l) => (
+                  <button
+                    key={l.nombre}
+                    type="button"
+                    onClick={() => setLista(l.nombre)}
+                    className={cn(
+                      'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+                      lista === l.nombre ? 'border-navy bg-navy text-white' : 'bg-white text-muted-foreground hover:bg-muted',
+                    )}
+                    aria-pressed={lista === l.nombre}
+                  >
+                    {l.nombre}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Precio que se propone al agregar productos; se puede cambiar en cada uno. Los
+                servicios no usan listas.
+              </p>
+            </div>
+
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5 text-navy">
                 <Package className="h-4 w-4" /> Agregar producto
@@ -303,6 +347,9 @@ export function UsaVentaTab({ metodosPago }: Props) {
                       <Badge variant={item.tipo === 'producto' ? 'secondary' : 'info'}>
                         {item.tipo === 'producto' ? 'Producto' : 'Servicio'}
                       </Badge>
+                      {item.listaPrecio && item.listaPrecio !== 'Particular' && (
+                        <Badge variant="outline">{item.listaPrecio}</Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {item.cantidad} × {formatUSD(item.precioUnitario)}
@@ -523,6 +570,7 @@ export function UsaVentaTab({ metodosPago }: Props) {
 
       <UsaItemDialog
         seleccion={seleccion}
+        listaInicial={lista}
         onClose={() => setSeleccion(null)}
         onAdd={(item) => setCart((prev) => [...prev, item])}
       />

@@ -7,6 +7,7 @@ import type {
   UsaConsumoPayload,
   UsaTip,
   UsaTipPayload,
+  UsaTipUpdatePayload,
   UsaEstado,
   UsaMovimiento,
   UsaProducto,
@@ -159,6 +160,13 @@ export const usaService = {
 
   async registrarTip(payload: UsaTipPayload): Promise<UsaTip> {
     const { data } = await apiClient.post<UsaTip>(`${BASE}/tips`, payload)
+    return data
+  },
+
+  async actualizarTip(id: number, payload: UsaTipUpdatePayload): Promise<UsaTip> {
+    // Solo se envían los campos definidos (el backend modifica únicamente los recibidos).
+    const body = Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined))
+    const { data } = await apiClient.put<UsaTip>(`${BASE}/tips/${id}`, body)
     return data
   },
 

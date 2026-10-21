@@ -5,6 +5,33 @@ export interface UsaEstado {
   password_configurada: boolean
   acceso_valido: boolean
   metodos_pago: string[]
+  listas_precios: string[]
+}
+
+// ---- Listas de precios de los productos USA ----
+// Misma idea que los tipos de precio de Colombia (Particular, Mayorista, Estilista,
+// Beauty Boss), pero cada lista es una columna del producto USA. Particular es el
+// precio al público y la lista por defecto del punto de venta.
+
+export type UsaListaPrecio = 'Particular' | 'Mayorista' | 'Estilista' | 'Beauty Boss'
+
+export type UsaCampoPrecio = 'precio_venta' | 'precio_mayorista' | 'precio_estilista' | 'precio_beauty_boss'
+
+export const USA_LISTAS_PRECIOS: { nombre: UsaListaPrecio; campo: UsaCampoPrecio; corto: string }[] = [
+  { nombre: 'Particular', campo: 'precio_venta', corto: 'Part.' },
+  { nombre: 'Mayorista', campo: 'precio_mayorista', corto: 'May.' },
+  { nombre: 'Estilista', campo: 'precio_estilista', corto: 'Est.' },
+  { nombre: 'Beauty Boss', campo: 'precio_beauty_boss', corto: 'B. Boss' },
+]
+
+export const USA_LISTA_DEFAULT: UsaListaPrecio = 'Particular'
+
+/** Precio del producto en una lista, o null si esa lista no tiene precio definido. */
+export function usaPrecioEnLista(p: UsaProducto, lista: UsaListaPrecio): number | null {
+  const def = USA_LISTAS_PRECIOS.find((l) => l.nombre === lista)
+  if (!def) return null
+  const valor = p[def.campo]
+  return typeof valor === 'number' && Number.isFinite(valor) ? valor : null
 }
 
 export interface UsaAcceso {
@@ -15,7 +42,10 @@ export interface UsaAcceso {
 export interface UsaProducto {
   id: number
   nombre: string
-  precio_venta: number
+  precio_venta: number // lista Particular (precio al público)
+  precio_mayorista: number | null
+  precio_estilista: number | null
+  precio_beauty_boss: number | null
   costo: number
   activo: boolean
   cantidad: number
@@ -24,6 +54,9 @@ export interface UsaProducto {
 export interface UsaProductoPayload {
   nombre: string
   precio_venta: number
+  precio_mayorista?: number | null
+  precio_estilista?: number | null
+  precio_beauty_boss?: number | null
   costo: number
   cantidad_inicial?: number
 }
@@ -31,6 +64,10 @@ export interface UsaProductoPayload {
 export interface UsaProductoUpdate {
   nombre?: string
   precio_venta?: number
+  // null vacía la lista; undefined la deja como está
+  precio_mayorista?: number | null
+  precio_estilista?: number | null
+  precio_beauty_boss?: number | null
   costo?: number
   activo?: boolean
 }
@@ -89,6 +126,7 @@ export interface UsaVentaItem {
   precio_unitario: number
   costo_unitario: number
   subtotal: number
+  lista_precio: string | null // Particular | Mayorista | Estilista | Beauty Boss (solo productos)
 }
 
 export interface UsaAbono {
@@ -117,6 +155,16 @@ export interface UsaTipPayload {
   venta_id?: number | null
   monto: number
   metodo_pago: string
+  para?: string | null
+  fecha?: string
+  notas?: string | null
+}
+
+// Edición de una propina: solo se envían (y cambian) los campos definidos.
+export interface UsaTipUpdatePayload {
+  venta_id?: number | null
+  monto?: number
+  metodo_pago?: string
   para?: string | null
   fecha?: string
   notas?: string | null
@@ -192,6 +240,7 @@ export interface UsaVentaItemPayload {
   servicio_id?: number
   cantidad: number
   precio_unitario: number
+  lista_precio?: UsaListaPrecio // solo productos
 }
 
 export interface UsaVentaPayload {
@@ -239,6 +288,7 @@ export interface UsaCartItem {
   descripcion: string
   cantidad: number
   precioUnitario: number
+  listaPrecio?: UsaListaPrecio // solo productos
 }
 
 export function usaCartItemSubtotal(item: UsaCartItem): number {
