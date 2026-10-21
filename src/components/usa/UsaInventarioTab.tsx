@@ -15,7 +15,7 @@ import { useUsaMovimientos, useUsaProductos } from '@/hooks/useUsa'
 import { presetRange, type DateRange } from '@/lib/dateRange'
 import { formatFechaHora, formatUSD } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import type { UsaProducto, UsaTipoMovimiento } from '@/types/usa'
+import { USA_LISTAS_PRECIOS, type UsaProducto, type UsaTipoMovimiento } from '@/types/usa'
 import { DateRangeControl } from '@/components/reportes/DateRangeControl'
 import { StatCard } from '@/components/reportes/StatCard'
 import { UsaStockDialog, type UsaStockModo } from '@/components/usa/UsaStockDialog'
@@ -32,6 +32,14 @@ import {
 } from '@/components/ui/table'
 
 const UMBRAL_BAJO = 3
+
+// Resumen de las 4 listas de precios para pantallas donde no caben las columnas.
+function resumenListas(p: UsaProducto): string {
+  return USA_LISTAS_PRECIOS.map((l) => {
+    const v = p[l.campo]
+    return `${l.corto} ${v === null ? '—' : formatUSD(v)}`
+  }).join(' · ')
+}
 
 type Sub = 'existencias' | 'movimientos'
 
@@ -161,7 +169,11 @@ export function UsaInventarioTab() {
                     <TableHead>Producto</TableHead>
                     <TableHead className="text-right">Stock</TableHead>
                     <TableHead className="hidden sm:table-cell text-right">Costo</TableHead>
-                    <TableHead className="hidden sm:table-cell text-right">Precio particular</TableHead>
+                    {USA_LISTAS_PRECIOS.map((l) => (
+                      <TableHead key={l.campo} className="hidden lg:table-cell text-right">
+                        {l.nombre}
+                      </TableHead>
+                    ))}
                     <TableHead className="hidden md:table-cell text-right">Valor (costo)</TableHead>
                     <TableHead className="w-24" />
                   </TableRow>
@@ -169,7 +181,7 @@ export function UsaInventarioTab() {
                 <TableBody>
                   {filtrados.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                         {productos.length === 0
                           ? 'Aún no hay productos USA. Créelos en la pestaña Catálogo.'
                           : 'Sin coincidencias'}
@@ -187,6 +199,9 @@ export function UsaInventarioTab() {
                               </Badge>
                             )}
                           </div>
+                          <p className="text-[11px] font-normal text-muted-foreground lg:hidden">
+                            {resumenListas(p)}
+                          </p>
                         </TableCell>
                         <TableCell
                           className={cn(
@@ -199,9 +214,20 @@ export function UsaInventarioTab() {
                         <TableCell className="hidden sm:table-cell text-right tabular-nums text-muted-foreground">
                           {formatUSD(p.costo)}
                         </TableCell>
-                        <TableCell className="hidden sm:table-cell text-right tabular-nums">
-                          {formatUSD(p.precio_venta)}
-                        </TableCell>
+                        {USA_LISTAS_PRECIOS.map((l) => {
+                          const valor = p[l.campo]
+                          return (
+                            <TableCell
+                              key={l.campo}
+                              className={cn(
+                                'hidden lg:table-cell text-right tabular-nums',
+                                l.nombre === 'Particular' && 'font-semibold text-navy',
+                              )}
+                            >
+                              {valor === null ? <span className="text-muted-foreground">—</span> : formatUSD(valor)}
+                            </TableCell>
+                          )
+                        })}
                         <TableCell className="hidden md:table-cell text-right tabular-nums">
                           {formatUSD(p.cantidad * p.costo)}
                         </TableCell>
