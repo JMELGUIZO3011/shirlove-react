@@ -498,6 +498,14 @@ function CartItemDetail({ item }: { item: CartItem }) {
       return (
         <>
           {item.cantidad} × {formatCOP(item.precioUnitario)}
+          {item.combo.productos.length > 0 && (
+            <>
+              {' · Incluye: '}
+              {item.combo.productos
+                .map((p) => `${p.cantidad}× ${p.producto_nombre}`)
+                .join(', ')}
+            </>
+          )}
         </>
       )
   }
